@@ -217,18 +217,19 @@ export function AccountChooser({
             </div>
           )}
 
-          <form onSubmit={handlePasswordSubmit} className="space-y-4">
-            {/* Hidden username input agar browser password manager mengaitkan kata sandi dengan akun ini */}
-            <input
-              type="text"
-              name="username"
-              value={pinPromptAccount.phone || pinPromptAccount.username}
-              autoComplete="username"
-              className="sr-only hidden"
-              tabIndex={-1}
-              aria-hidden="true"
-              readOnly
-            />
+          <form action="/api/auth/login" method="POST" onSubmit={handlePasswordSubmit} className="space-y-4">
+            {/* Akun Terpilih - terbaca jelas oleh user & terdeteksi 100% oleh browser password manager */}
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground font-medium">Akun</Label>
+              <Input
+                name="username"
+                type="text"
+                autoComplete="username"
+                value={pinPromptAccount.phone || pinPromptAccount.username}
+                readOnly
+                className="bg-muted/40 text-foreground font-medium text-sm h-10 border-border/60 select-none cursor-default"
+              />
+            </div>
 
             <div className="space-y-2">
               <Label htmlFor="account-password-input" className="text-sm font-medium">

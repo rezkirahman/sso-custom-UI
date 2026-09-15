@@ -159,7 +159,7 @@ export function PhonePinForm({
         )}
 
         {step === "phone" ? (
-          <form onSubmit={handlePhoneSubmit} className="space-y-4">
+          <form action="/api/auth/search" method="GET" onSubmit={handlePhoneSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="phone-input" className="text-sm font-medium">
                 Nomor Telepon / Username
@@ -189,18 +189,6 @@ export function PhonePinForm({
               </p>
             </div>
 
-            {/* Hidden password input agar browser password manager mendeteksi formulir kredensial */}
-            <input
-              type="password"
-              name="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="sr-only hidden"
-              tabIndex={-1}
-              aria-hidden="true"
-            />
-
             <Button type="submit" disabled={loading || !phone.trim()} className="w-full h-11 font-medium text-base">
               {loading ? (
                 <>
@@ -213,18 +201,19 @@ export function PhonePinForm({
             </Button>
           </form>
         ) : (
-          <form onSubmit={handlePasswordSubmit} className="space-y-4">
-            {/* Hidden username input agar browser password manager mengaitkan kata sandi dengan user ini */}
-            <input
-              type="text"
-              name="username"
-              value={phone}
-              autoComplete="username"
-              className="sr-only hidden"
-              tabIndex={-1}
-              aria-hidden="true"
-              readOnly
-            />
+          <form action="/api/auth/login" method="POST" onSubmit={handlePasswordSubmit} className="space-y-4">
+            {/* Akun Terpilih - terbaca jelas oleh user & terdeteksi 100% oleh browser password manager */}
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground font-medium">Akun</Label>
+              <Input
+                name="username"
+                type="text"
+                autoComplete="username"
+                value={phone}
+                readOnly
+                className="bg-muted/40 text-foreground font-medium text-sm h-10 border-border/60 select-none cursor-default"
+              />
+            </div>
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
