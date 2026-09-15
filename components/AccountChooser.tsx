@@ -339,7 +339,7 @@ export function AccountChooser({
                       variant="ghost"
                       size="icon"
                       onClick={(e) => handleDirectLogout(e, account)}
-                      className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors rounded-lg"
+                      className="h-8 w-8 cursor-pointer text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors rounded-lg"
                       title="Keluar"
                       aria-label="Keluar"
                     >
