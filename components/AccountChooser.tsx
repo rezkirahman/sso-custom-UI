@@ -16,7 +16,7 @@ import {
   Eye,
   EyeOff,
   Lock,
-  LogOut,
+  Trash2,
 } from "lucide-react";
 
 interface AccountChooserProps {
@@ -316,14 +316,10 @@ export function AccountChooser({
                       <p className="font-semibold text-sm truncate text-foreground group-hover:text-primary transition-colors">
                         {account.displayName}
                       </p>
-                      {hasActiveSession ? (
+                      {hasActiveSession && (
                         <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
                           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
                           Sesi Aktif
-                        </span>
-                      ) : (
-                        <span className="text-[10px] text-muted-foreground bg-muted/70 px-2 py-0.5 rounded-full border border-border/50">
-                          Keluar
                         </span>
                       )}
                     </div>
@@ -333,7 +329,7 @@ export function AccountChooser({
                   </div>
                 </div>
 
-                {/* Tombol 1x Klik Keluar */}
+                {/* Tombol Hapus Akun */}
                 <div className="shrink-0">
                   {isLoading ? (
                     <Loader2 className="h-4 w-4 animate-spin text-primary" />
@@ -341,13 +337,12 @@ export function AccountChooser({
                     <Button
                       type="button"
                       variant="ghost"
-                      size="sm"
+                      size="icon"
                       onClick={(e) => handleDirectLogout(e, account)}
-                      className="h-8 px-2.5 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors gap-1.5 rounded-lg"
-                      title="Keluar & hapus sesi akun ini"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors rounded-lg"
+                      title="Hapus akun dari perangkat"
                     >
-                      <LogOut className="h-3.5 w-3.5" />
-                      <span>Keluar</span>
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   )}
                 </div>
