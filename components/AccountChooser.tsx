@@ -134,6 +134,24 @@ export function AccountChooser({
         return;
       }
 
+      // Simpan kredensial ke browser password manager jika didukung
+      if (typeof window !== "undefined" && "PasswordCredential" in window && navigator.credentials) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const CredClass = (window as any).PasswordCredential;
+          if (CredClass) {
+            const cred = new CredClass({
+              id: pinPromptAccount.phone || pinPromptAccount.username,
+              password: cleanPassword,
+              name: pinPromptAccount.displayName,
+            });
+            await navigator.credentials.store(cred);
+          }
+        } catch {
+          // Abaikan jika browser membatasi atau user membatalkan
+        }
+      }
+
       const targetUrl = data.callbackUrl || "/login";
       if (onSuccess) {
         onSuccess(targetUrl);
@@ -200,6 +218,18 @@ export function AccountChooser({
           )}
 
           <form onSubmit={handlePasswordSubmit} className="space-y-4">
+            {/* Hidden username input agar browser password manager mengaitkan kata sandi dengan akun ini */}
+            <input
+              type="text"
+              name="username"
+              value={pinPromptAccount.phone || pinPromptAccount.username}
+              autoComplete="username"
+              className="sr-only hidden"
+              tabIndex={-1}
+              aria-hidden="true"
+              readOnly
+            />
+
             <div className="space-y-2">
               <Label htmlFor="account-password-input" className="text-sm font-medium">
                 Kata Sandi
@@ -210,6 +240,7 @@ export function AccountChooser({
                 </div>
                 <Input
                   id="account-password-input"
+                  name="password"
                   type={showPassword ? "text" : "password"}
                   autoComplete="current-password"
                   placeholder="Masukkan kata sandi akun Anda"

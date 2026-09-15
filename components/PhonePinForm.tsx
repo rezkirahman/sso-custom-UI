@@ -101,6 +101,24 @@ export function PhonePinForm({
         return;
       }
 
+      // Simpan kredensial ke browser password manager jika didukung
+      if (typeof window !== "undefined" && "PasswordCredential" in window && navigator.credentials) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const CredClass = (window as any).PasswordCredential;
+          if (CredClass) {
+            const cred = new CredClass({
+              id: phone.trim(),
+              password: cleanPassword,
+              name: foundUser?.displayName || phone.trim(),
+            });
+            await navigator.credentials.store(cred);
+          }
+        } catch {
+          // Abaikan jika browser tidak mengizinkan atau user membatalkan
+        }
+      }
+
       // Login berhasil, alihkan
       const targetUrl = data.callbackUrl || "/";
       if (onSuccess) {
@@ -152,9 +170,10 @@ export function PhonePinForm({
                 </div>
                 <Input
                   id="phone-input"
+                  name="username"
                   ref={phoneInputRef}
                   type="text"
-                  autoComplete="username tel"
+                  autoComplete="username"
                   placeholder="Contoh: 081234567890 atau rezki"
                   value={phone}
                   onChange={(e) => {
@@ -170,6 +189,18 @@ export function PhonePinForm({
               </p>
             </div>
 
+            {/* Hidden password input agar browser password manager mendeteksi formulir kredensial */}
+            <input
+              type="password"
+              name="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="sr-only hidden"
+              tabIndex={-1}
+              aria-hidden="true"
+            />
+
             <Button type="submit" disabled={loading || !phone.trim()} className="w-full h-11 font-medium text-base">
               {loading ? (
                 <>
@@ -183,6 +214,18 @@ export function PhonePinForm({
           </form>
         ) : (
           <form onSubmit={handlePasswordSubmit} className="space-y-4">
+            {/* Hidden username input agar browser password manager mengaitkan kata sandi dengan user ini */}
+            <input
+              type="text"
+              name="username"
+              value={phone}
+              autoComplete="username"
+              className="sr-only hidden"
+              tabIndex={-1}
+              aria-hidden="true"
+              readOnly
+            />
+
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password-input" className="text-sm font-medium">
@@ -196,6 +239,7 @@ export function PhonePinForm({
                 </div>
                 <Input
                   id="password-input"
+                  name="password"
                   ref={passwordInputRef}
                   type={showPassword ? "text" : "password"}
                   autoComplete="current-password"

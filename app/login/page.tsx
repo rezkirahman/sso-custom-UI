@@ -46,11 +46,7 @@ function LoginContent() {
   }, []);
 
   const handleSuccess = (targetUrl: string) => {
-    if (targetUrl.startsWith("http://") || targetUrl.startsWith("https://")) {
-      window.location.href = targetUrl;
-    } else {
-      router.push(targetUrl);
-    }
+    window.location.href = targetUrl;
   };
 
   if (loading) {
@@ -73,9 +69,6 @@ function LoginContent() {
         <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground font-heading">
           Agforce Accounts
         </h1>
-        <p className="text-xs sm:text-sm text-muted-foreground max-w-sm">
-          Satu akun untuk seluruh ekosistem: Dexter, Venturis, dan Sixzense.
-        </p>
       </div>
 
       {/* Main View: Account Chooser atau Form PIN */}
