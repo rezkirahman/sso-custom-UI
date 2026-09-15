@@ -164,11 +164,11 @@ export async function searchUserByPhone(phoneOrUsername: string): Promise<Zitade
 export async function verifyUserPin(userId: string, pin: string): Promise<VerifyPinResult> {
   const trimmedPin = pin.trim();
 
-  // Validasi format PIN harus 6 digit angka
-  if (!/^\d{6}$/.test(trimmedPin)) {
+  // Validasi password/PIN tidak boleh kosong
+  if (!trimmedPin) {
     return {
       success: false,
-      error: "PIN harus terdiri dari 6 digit angka.",
+      error: "Kata sandi atau PIN wajib diisi.",
     };
   }
 
@@ -202,13 +202,27 @@ export async function verifyUserPin(userId: string, pin: string): Promise<Verify
         };
       } else {
         const errJson = await res.json().catch(() => null);
-        console.warn("[Zitadel /v2/sessions Warning]", res.status, errJson);
+        console.warn("[Zitadel /v2/sessions Error]", res.status, errJson);
 
-        // Jika ZITADEL mengembalikan kode error spesifik PIN salah
-        if (res.status === 400 && errJson?.message?.toLowerCase().includes("password")) {
+        // Jika ZITADEL menolak password/PIN
+        const isPasswordError =
+          res.status === 400 ||
+          errJson?.code === 3 ||
+          errJson?.message?.toLowerCase().includes("password") ||
+          errJson?.details?.some((d: { id?: string }) => d.id?.includes("COMMAND-3M0fs"));
+
+        if (isPasswordError) {
           return {
             success: false,
             error: "PIN yang Anda masukkan salah. Silakan coba lagi.",
+          };
+        }
+
+        // Jika user bukan akun sample/demo dan ZITADEL mengembalikan error lain
+        if (!userId.startsWith("usr_")) {
+          return {
+            success: false,
+            error: errJson?.message || "Gagal memverifikasi PIN ke server ZITADEL.",
           };
         }
       }
@@ -217,9 +231,7 @@ export async function verifyUserPin(userId: string, pin: string): Promise<Verify
     }
   }
 
-  // 2. Verifikasi Resilient Fallback (untuk testing lokal & akun dev):
-  // PIN default untuk testing: '123456' atau digit berulang seperti '000000'
-  // Jika PIN salah (misal '999999'), tolak untuk simulasi validasi
+  // 2. Verifikasi untuk Akun Sample/Demo lokal (usr_01, usr_02, dll)
   if (trimmedPin === "999999" || trimmedPin === "111111") {
     return {
       success: false,
@@ -227,7 +239,6 @@ export async function verifyUserPin(userId: string, pin: string): Promise<Verify
     };
   }
 
-  // Terbitkan session token
   const pseudoSessionId = "sess_" + Buffer.from(`${userId}-${Date.now()}`).toString("base64url").substring(0, 24);
   const pseudoToken = "tok_" + Math.random().toString(36).substring(2, 12);
 

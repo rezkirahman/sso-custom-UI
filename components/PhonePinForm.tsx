@@ -5,8 +5,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PinInput } from "@/components/PinInput";
-import { Phone, ArrowLeft, Loader2, ShieldCheck, AlertCircle, Eye, EyeOff } from "lucide-react";
+import { Phone, ArrowLeft, Loader2, ShieldCheck, AlertCircle, Eye, EyeOff, Lock } from "lucide-react";
 
 interface PhonePinFormProps {
   authRequestId?: string;
@@ -21,19 +20,22 @@ export function PhonePinForm({
   onBackToChooser,
   hasSavedAccounts = false,
 }: PhonePinFormProps) {
-  const [step, setStep] = React.useState<"phone" | "pin">("phone");
+  const [step, setStep] = React.useState<"phone" | "password">("phone");
   const [phone, setPhone] = React.useState("");
-  const [pin, setPin] = React.useState("");
-  const [maskPin, setMaskPin] = React.useState(true);
+  const [password, setPassword] = React.useState("");
+  const [showPassword, setShowPassword] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [foundUser, setFoundUser] = React.useState<{ displayName: string; phone: string } | null>(null);
 
   const phoneInputRef = React.useRef<HTMLInputElement>(null);
+  const passwordInputRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
     if (step === "phone") {
       phoneInputRef.current?.focus();
+    } else if (step === "password") {
+      passwordInputRef.current?.focus();
     }
   }, [step]);
 
@@ -50,31 +52,30 @@ export function PhonePinForm({
     setError(null);
 
     try {
-      // Validasi nomor via API pencarian
       const res = await fetch(`/api/auth/search?q=${encodeURIComponent(cleanPhone)}`);
       const data = await res.json();
 
       if (!res.ok || !data.user) {
-        setError(data.error || "Nomor telepon tidak terdaftar sebagai karyawan Agforce.");
+        setError(data.error || "Nomor telepon atau username tidak terdaftar sebagai karyawan Agforce.");
         setLoading(false);
         return;
       }
 
       setFoundUser(data.user);
-      setStep("pin");
+      setStep("password");
     } catch {
-      // Jika endpoint search tidak tersedia, lanjut ke langkah PIN
-      setStep("pin");
+      setStep("password");
     } finally {
       setLoading(false);
     }
   };
 
-  // Langkah 2: Submit verifikasi PIN
-  const handlePinSubmit = async (finalPin?: string) => {
-    const pinToVerify = finalPin || pin;
-    if (pinToVerify.length !== 6) {
-      setError("PIN harus terdiri dari 6 digit angka.");
+  // Langkah 2: Submit verifikasi Password / PIN
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanPassword = password.trim();
+    if (!cleanPassword) {
+      setError("Silakan masukkan kata sandi atau PIN Anda.");
       return;
     }
 
@@ -87,7 +88,7 @@ export function PhonePinForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           phone: phone.trim(),
-          pin: pinToVerify,
+          password: cleanPassword,
           authRequestId,
         }),
       });
@@ -95,7 +96,7 @@ export function PhonePinForm({
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        setError(data.error || "Verifikasi gagal. Silakan coba lagi.");
+        setError(data.error || "Kata sandi atau PIN salah. Silakan coba lagi.");
         setLoading(false);
         return;
       }
@@ -120,14 +121,14 @@ export function PhonePinForm({
           <ShieldCheck className="h-6 w-6" />
         </div>
         <CardTitle className="text-2xl font-bold tracking-tight">
-          {step === "phone" ? "Masuk ke Agforce" : "Verifikasi PIN"}
+          {step === "phone" ? "Masuk ke Agforce" : "Masukkan Kata Sandi"}
         </CardTitle>
         <CardDescription className="text-sm">
           {step === "phone"
-            ? "Gunakan nomor telepon terdaftar untuk mengakses seluruh aplikasi ekosistem Agforce"
+            ? "Gunakan nomor telepon atau username terdaftar untuk mengakses ekosistem Agforce"
             : foundUser
-            ? `Halo, ${foundUser.displayName}! Masukkan 6 digit PIN keamanan akun Anda`
-            : `Masukkan 6 digit PIN untuk nomor ${phone}`}
+            ? `Halo, ${foundUser.displayName}! Masukkan kata sandi atau PIN akun Anda`
+            : `Masukkan kata sandi atau PIN untuk ${phone}`}
         </CardDescription>
       </CardHeader>
 
@@ -153,8 +154,8 @@ export function PhonePinForm({
                   id="phone-input"
                   ref={phoneInputRef}
                   type="text"
-                  autoComplete="tel"
-                  placeholder="Contoh: 081234567890"
+                  autoComplete="username tel"
+                  placeholder="Contoh: 081234567890 atau rezki"
                   value={phone}
                   onChange={(e) => {
                     setPhone(e.target.value);
@@ -165,7 +166,7 @@ export function PhonePinForm({
                 />
               </div>
               <p className="text-xs text-muted-foreground">
-                Format: <code>08...</code> atau username karyawan
+                Format: Nomor handphone <code>08...</code> atau username karyawan
               </p>
             </div>
 
@@ -181,46 +182,53 @@ export function PhonePinForm({
             </Button>
           </form>
         ) : (
-          <div className="space-y-5">
-            <div className="space-y-3">
+          <form onSubmit={handlePasswordSubmit} className="space-y-4">
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label className="text-sm font-medium">6 Digit PIN</Label>
-                <button
-                  type="button"
-                  onClick={() => setMaskPin(!maskPin)}
-                  className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
-                >
-                  {maskPin ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-                  <span>{maskPin ? "Tampilkan PIN" : "Sembunyikan"}</span>
-                </button>
+                <Label htmlFor="password-input" className="text-sm font-medium">
+                  Kata Sandi / PIN
+                </Label>
               </div>
 
-              <PinInput
-                length={6}
-                value={pin}
-                onChange={(val) => {
-                  setPin(val);
-                  if (error) setError(null);
-                }}
-                onComplete={(finalPin) => {
-                  handlePinSubmit(finalPin);
-                }}
-                disabled={loading}
-                hasError={!!error}
-                mask={maskPin}
-              />
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-muted-foreground">
+                  <Lock className="h-4 w-4" />
+                </div>
+                <Input
+                  id="password-input"
+                  ref={passwordInputRef}
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
+                  placeholder="Masukkan kata sandi atau PIN Anda"
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (error) setError(null);
+                  }}
+                  disabled={loading}
+                  className="pl-10 pr-10 h-11 text-base"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground transition-colors"
+                  tabIndex={-1}
+                  aria-label={showPassword ? "Sembunyikan kata sandi" : "Tampilkan kata sandi"}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
 
             <Button
-              type="button"
-              onClick={() => handlePinSubmit()}
-              disabled={loading || pin.length !== 6}
+              type="submit"
+              disabled={loading || !password.trim()}
               className="w-full h-11 font-medium text-base mt-2"
             >
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Memverifikasi PIN...
+                  Memverifikasi...
                 </>
               ) : (
                 "Masuk"
@@ -231,16 +239,16 @@ export function PhonePinForm({
               type="button"
               onClick={() => {
                 setStep("phone");
-                setPin("");
+                setPassword("");
                 setError(null);
               }}
               disabled={loading}
               className="w-full text-center text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center justify-center gap-1.5 pt-1"
             >
               <ArrowLeft className="h-3 w-3" />
-              <span>Ganti nomor telepon</span>
+              <span>Ganti akun atau nomor telepon</span>
             </button>
-          </div>
+          </form>
         )}
       </CardContent>
 

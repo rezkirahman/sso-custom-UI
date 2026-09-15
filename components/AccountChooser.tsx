@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { SavedAccount } from "@/lib/session-store";
-import { PinInput } from "@/components/PinInput";
-import { UserPlus, Trash2, ArrowRight, Loader2, Users, AlertCircle, ArrowLeft, Eye, EyeOff } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { UserPlus, Trash2, ArrowRight, Loader2, Users, AlertCircle, ArrowLeft, Eye, EyeOff, Lock } from "lucide-react";
 
 interface AccountChooserProps {
   accounts: SavedAccount[];
@@ -87,13 +88,14 @@ export function AccountChooser({
     }
   };
 
-  // Submit PIN untuk akun tertentu
-  const handlePinSubmit = async (finalPin?: string) => {
+  // Submit Kata Sandi / PIN untuk akun tertentu
+  const handlePinSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!pinPromptAccount) return;
-    const pinToVerify = finalPin || pin;
+    const pinToVerify = pin.trim();
 
-    if (pinToVerify.length !== 6) {
-      setError("PIN harus 6 digit angka.");
+    if (!pinToVerify) {
+      setError("Silakan masukkan kata sandi atau PIN Anda.");
       return;
     }
 
@@ -174,48 +176,55 @@ export function AccountChooser({
             </div>
           )}
 
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Masukkan 6 Digit PIN:</span>
-              <button
-                type="button"
-                onClick={() => setMaskPin(!maskPin)}
-                className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
-              >
-                {maskPin ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-                <span>{maskPin ? "Tampilkan" : "Sembunyikan"}</span>
-              </button>
+          <form onSubmit={handlePinSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="account-password-input" className="text-sm font-medium">
+                Kata Sandi / PIN
+              </Label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-muted-foreground">
+                  <Lock className="h-4 w-4" />
+                </div>
+                <Input
+                  id="account-password-input"
+                  type={maskPin ? "password" : "text"}
+                  autoComplete="current-password"
+                  placeholder="Masukkan kata sandi atau PIN"
+                  value={pin}
+                  onChange={(e) => {
+                    setPin(e.target.value);
+                    if (error) setError(null);
+                  }}
+                  disabled={!!loadingId}
+                  className="pl-10 pr-10 h-11 text-base"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={() => setMaskPin(!maskPin)}
+                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground transition-colors"
+                  tabIndex={-1}
+                >
+                  {maskPin ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
 
-            <PinInput
-              length={6}
-              value={pin}
-              onChange={(val) => {
-                setPin(val);
-                if (error) setError(null);
-              }}
-              onComplete={(p) => handlePinSubmit(p)}
-              disabled={!!loadingId}
-              hasError={!!error}
-              mask={maskPin}
-            />
-          </div>
-
-          <Button
-            type="button"
-            onClick={() => handlePinSubmit()}
-            disabled={!!loadingId || pin.length !== 6}
-            className="w-full h-11 font-medium text-base mt-2"
-          >
-            {loadingId ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Memverifikasi...
-              </>
-            ) : (
-              "Lanjutkan Masuk"
-            )}
-          </Button>
+            <Button
+              type="submit"
+              disabled={!!loadingId || !pin.trim()}
+              className="w-full h-11 font-medium text-base mt-2"
+            >
+              {loadingId ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Memverifikasi...
+                </>
+              ) : (
+                "Lanjutkan Masuk"
+              )}
+            </Button>
+          </form>
         </CardContent>
 
         <CardFooter className="border-t border-border/50 pt-3">

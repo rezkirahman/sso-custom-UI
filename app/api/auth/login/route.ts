@@ -5,14 +5,15 @@ import { saveAccount, setActiveSession } from "@/lib/session-store";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { phone, pin, authRequestId } = body;
+    const { phone, pin, password: bodyPassword, authRequestId } = body;
+    const password = (pin || bodyPassword || "").trim();
 
     if (!phone || typeof phone !== "string") {
-      return NextResponse.json({ error: "Nomor telepon wajib diisi." }, { status: 400 });
+      return NextResponse.json({ error: "Nomor telepon atau username wajib diisi." }, { status: 400 });
     }
 
-    if (!pin || typeof pin !== "string" || pin.length !== 6) {
-      return NextResponse.json({ error: "PIN 6 digit wajib diisi." }, { status: 400 });
+    if (!password) {
+      return NextResponse.json({ error: "Kata sandi atau PIN wajib diisi." }, { status: 400 });
     }
 
     // 1. Cari user di ZITADEL
@@ -24,8 +25,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 2. Verifikasi PIN
-    const verifyResult = await verifyUserPin(user.id, pin);
+    // 2. Verifikasi Password / PIN
+    const verifyResult = await verifyUserPin(user.id, password);
     if (!verifyResult.success) {
       return NextResponse.json(
         { error: verifyResult.error || "PIN yang dimasukkan salah." },
