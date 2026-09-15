@@ -125,3 +125,37 @@ export async function clearActiveSession(): Promise<void> {
   const cookieStore = await cookies();
   cookieStore.delete(ACTIVE_SESSION_COOKIE);
 }
+
+/**
+ * Mengosongkan session dari akun tertentu (Logout akun) tanpa menghapusnya dari daftar perangkat
+ */
+export async function clearAccountSession(accountId: string): Promise<SavedAccount[]> {
+  const accounts = await getSavedAccounts();
+  const updated = accounts.map((a) => {
+    if (a.id === accountId) {
+      const copy = { ...a };
+      delete copy.sessionId;
+      delete copy.sessionToken;
+      return copy;
+    }
+    return a;
+  });
+
+  const cookieStore = await cookies();
+  cookieStore.set({
+    name: SAVED_ACCOUNTS_COOKIE,
+    value: encodeURIComponent(JSON.stringify(updated)),
+    path: "/",
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    maxAge: 60 * 60 * 24 * 30,
+  });
+
+  const active = await getActiveSession();
+  if (active?.userId === accountId) {
+    await clearActiveSession();
+  }
+
+  return updated;
+}

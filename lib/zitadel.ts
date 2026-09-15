@@ -301,3 +301,31 @@ export async function finalizeAuthRequest(
     callbackUrl: `/?authRequestID=${encodeURIComponent(authRequestId)}&status=authenticated`,
   };
 }
+
+/**
+ * Menghapus / Mengakhiri Sesi di server ZITADEL
+ */
+export async function deleteSession(sessionId: string): Promise<boolean> {
+  if (!sessionId || !ZITADEL_PAT) return true;
+
+  try {
+    const res = await fetch(`${ZITADEL_ISSUER}/v2/sessions/${sessionId}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${ZITADEL_PAT}`,
+      },
+    });
+
+    if (res.ok) {
+      return true;
+    } else {
+      const errText = await res.text();
+      console.warn("[Zitadel deleteSession Warning]", res.status, errText);
+      return false;
+    }
+  } catch (err) {
+    console.warn("[Zitadel deleteSession Exception]", err);
+    return false;
+  }
+}
+
