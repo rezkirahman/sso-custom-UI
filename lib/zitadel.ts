@@ -214,7 +214,7 @@ export async function verifyUserPin(userId: string, pin: string): Promise<Verify
         if (isPasswordError) {
           return {
             success: false,
-            error: "PIN yang Anda masukkan salah. Silakan coba lagi.",
+            error: "Kata sandi atau PIN yang Anda masukkan salah. Silakan coba lagi.",
           };
         }
 
@@ -222,7 +222,7 @@ export async function verifyUserPin(userId: string, pin: string): Promise<Verify
         if (!userId.startsWith("usr_")) {
           return {
             success: false,
-            error: errJson?.message || "Gagal memverifikasi PIN ke server ZITADEL.",
+            error: errJson?.message || "Gagal memverifikasi kata sandi ke server ZITADEL.",
           };
         }
       }
