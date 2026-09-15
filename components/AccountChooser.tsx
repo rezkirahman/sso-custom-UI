@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   UserPlus,
-  Trash2,
   Loader2,
   Users,
   AlertCircle,
@@ -17,7 +16,6 @@ import {
   Eye,
   EyeOff,
   Lock,
-  MoreVertical,
   LogOut,
 } from "lucide-react";
 
@@ -38,7 +36,6 @@ export function AccountChooser({
 }: AccountChooserProps) {
   const [accountList, setAccountList] = React.useState<SavedAccount[]>(accounts);
   const [loadingId, setLoadingId] = React.useState<string | null>(null);
-  const [activeMenuId, setActiveMenuId] = React.useState<string | null>(null);
   const [pinPromptAccount, setPinPromptAccount] = React.useState<SavedAccount | null>(null);
   const [password, setPassword] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
@@ -47,19 +44,6 @@ export function AccountChooser({
   React.useEffect(() => {
     setAccountList(accounts);
   }, [accounts]);
-
-  // Tutup menu titik tiga jika user klik di luar
-  React.useEffect(() => {
-    const handleDocumentClick = () => {
-      setActiveMenuId(null);
-    };
-    if (activeMenuId) {
-      document.addEventListener("click", handleDocumentClick);
-    }
-    return () => {
-      document.removeEventListener("click", handleDocumentClick);
-    };
-  }, [activeMenuId]);
 
   const getInitials = (name: string) => {
     const parts = name.trim().split(" ");
@@ -71,7 +55,7 @@ export function AccountChooser({
 
   // Login 1-klik via Resume Route
   const handleSelectAccount = async (account: SavedAccount) => {
-    // Jika sesi sudah tidak ada di akun ini, langsung minta kata sandi
+    // Jika sesi sudah tidak ada di akun ini, minta kata sandi
     if (!account.sessionId) {
       setPinPromptAccount(account);
       setPassword("");
@@ -162,14 +146,9 @@ export function AccountChooser({
     }
   };
 
-  // Eksekusi aksi dari Menu Titik Tiga (Logout atau Hapus)
-  const handleMenuAction = async (
-    e: React.MouseEvent,
-    account: SavedAccount,
-    action: "logout" | "remove"
-  ) => {
+  // 1-Klik Keluar & Hapus Sesi ke ZITADEL
+  const handleDirectLogout = async (e: React.MouseEvent, account: SavedAccount) => {
     e.stopPropagation();
-    setActiveMenuId(null);
     setLoadingId(account.id);
 
     try {
@@ -178,36 +157,21 @@ export function AccountChooser({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           accountId: account.id,
-          action,
+          action: "remove",
         }),
       });
 
       const data = await res.json();
       if (res.ok && data.success) {
-        if (action === "remove") {
-          const updated = accountList.filter((a) => a.id !== account.id);
-          setAccountList(updated);
-          onAccountsUpdated?.(updated);
-          if (updated.length === 0) {
-            onUseAnotherAccount();
-          }
-        } else {
-          // Action logout: tandai sesi akun ini sudah tidak aktif
-          const updated = accountList.map((a) => {
-            if (a.id === account.id) {
-              const copy = { ...a };
-              delete copy.sessionId;
-              delete copy.sessionToken;
-              return copy;
-            }
-            return a;
-          });
-          setAccountList(updated);
-          onAccountsUpdated?.(updated);
+        const updated = accountList.filter((a) => a.id !== account.id);
+        setAccountList(updated);
+        onAccountsUpdated?.(updated);
+        if (updated.length === 0) {
+          onUseAnotherAccount();
         }
       }
     } catch (err) {
-      console.error("Gagal melakukan aksi:", err);
+      console.error("Gagal keluar:", err);
     } finally {
       setLoadingId(null);
     }
@@ -330,31 +294,31 @@ export function AccountChooser({
         <div className="space-y-2">
           {accountList.map((account) => {
             const isLoading = loadingId === account.id;
-            const isMenuOpen = activeMenuId === account.id;
             const hasActiveSession = !!account.sessionId;
 
             return (
               <div
                 key={account.id}
                 onClick={() => handleSelectAccount(account)}
-                className={`relative group flex items-center justify-between p-3.5 rounded-xl border border-border/70 transition-all cursor-pointer ${
+                className={`group flex items-center justify-between p-3.5 rounded-xl border border-border/70 transition-all cursor-pointer ${
                   isLoading
                     ? "bg-primary/5 border-primary/40 pointer-events-none"
                     : "hover:bg-accent/60 hover:border-primary/40 active:scale-[0.99]"
                 }`}
               >
-                <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                {/* Info Akun (Klik untuk Login) */}
+                <div className="flex items-center gap-3.5 min-w-0 flex-1 mr-2">
                   <Avatar className="h-10 w-10 border border-primary/20 bg-primary/10 text-primary font-semibold shrink-0">
                     <AvatarFallback>{getInitials(account.displayName)}</AvatarFallback>
                   </Avatar>
                   <div className="min-w-0 flex-1 text-left">
                     <div className="flex items-center gap-2">
-                      <p className="font-semibold text-sm truncate text-foreground">
+                      <p className="font-semibold text-sm truncate text-foreground group-hover:text-primary transition-colors">
                         {account.displayName}
                       </p>
                       {hasActiveSession ? (
                         <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
                           Sesi Aktif
                         </span>
                       ) : (
@@ -369,53 +333,22 @@ export function AccountChooser({
                   </div>
                 </div>
 
-                {/* Tombol Aksi Menu Titik Tiga (Dropdown) */}
-                <div className="relative ml-2 shrink-0">
+                {/* Tombol 1x Klik Keluar */}
+                <div className="shrink-0">
                   {isLoading ? (
                     <Loader2 className="h-4 w-4 animate-spin text-primary" />
                   ) : (
-                    <button
+                    <Button
                       type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setActiveMenuId(isMenuOpen ? null : account.id);
-                      }}
-                      className={`p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors ${
-                        isMenuOpen ? "bg-muted text-foreground" : ""
-                      }`}
-                      title="Menu Opsi Akun"
-                      aria-label="Opsi Akun"
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => handleDirectLogout(e, account)}
+                      className="h-8 px-2.5 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors gap-1.5 rounded-lg"
+                      title="Keluar & hapus sesi akun ini"
                     >
-                      <MoreVertical className="h-4 w-4" />
-                    </button>
-                  )}
-
-                  {/* Dropdown Menu Popover */}
-                  {isMenuOpen && (
-                    <div
-                      onClick={(e) => e.stopPropagation()}
-                      className="absolute right-0 top-full mt-1.5 w-48 rounded-xl border border-border/80 bg-popover p-1.5 shadow-lg shadow-black/10 z-50 animate-in fade-in zoom-in-95 duration-150"
-                    >
-                      {hasActiveSession && (
-                        <button
-                          type="button"
-                          onClick={(e) => handleMenuAction(e, account, "logout")}
-                          className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium rounded-lg text-foreground hover:bg-accent transition-colors text-left"
-                        >
-                          <LogOut className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span>Keluar dari Sesi</span>
-                        </button>
-                      )}
-
-                      <button
-                        type="button"
-                        onClick={(e) => handleMenuAction(e, account, "remove")}
-                        className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium rounded-lg text-destructive hover:bg-destructive/10 transition-colors text-left"
-                      >
-                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                        <span>Hapus dari Perangkat</span>
-                      </button>
-                    </div>
+                      <LogOut className="h-3.5 w-3.5" />
+                      <span>Keluar</span>
+                    </Button>
                   )}
                 </div>
               </div>
