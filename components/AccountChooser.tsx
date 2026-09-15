@@ -16,7 +16,7 @@ import {
   Eye,
   EyeOff,
   Lock,
-  Trash2,
+  LogOut,
 } from "lucide-react";
 
 interface AccountChooserProps {
@@ -329,7 +329,7 @@ export function AccountChooser({
                   </div>
                 </div>
 
-                {/* Tombol Hapus Akun */}
+                {/* Tombol Keluar (Logout) */}
                 <div className="shrink-0">
                   {isLoading ? (
                     <Loader2 className="h-4 w-4 animate-spin text-primary" />
@@ -339,10 +339,11 @@ export function AccountChooser({
                       variant="ghost"
                       size="icon"
                       onClick={(e) => handleDirectLogout(e, account)}
-                      className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors rounded-lg"
-                      title="Hapus akun dari perangkat"
+                      className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors rounded-lg"
+                      title="Keluar"
+                      aria-label="Keluar"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <LogOut className="h-4 w-4" />
                     </Button>
                   )}
                 </div>
