@@ -175,6 +175,26 @@ export async function searchUserByPhone(phoneOrUsername: string): Promise<Zitade
   const token = await getServiceAccountToken();
   if (token) {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const queries: any[] = [
+        { userNameQuery: { userName: trimmed, method: "TEXT_FILTER_METHOD_EQUALS_IGNORE_CASE" } },
+      ];
+
+      if (cleanDigits.length >= 4) {
+        queries.push({ userNameQuery: { userName: cleanDigits, method: "TEXT_FILTER_METHOD_CONTAINS" } });
+        queries.push({ phoneQuery: { phone: cleanDigits, method: "TEXT_FILTER_METHOD_CONTAINS" } });
+        if (cleanDigits.startsWith("0")) {
+          queries.push({ phoneQuery: { phone: "+62" + cleanDigits.substring(1), method: "TEXT_FILTER_METHOD_CONTAINS" } });
+        } else if (cleanDigits.startsWith("62")) {
+          queries.push({ userNameQuery: { userName: "0" + cleanDigits.substring(2), method: "TEXT_FILTER_METHOD_CONTAINS" } });
+          queries.push({ phoneQuery: { phone: "+" + cleanDigits, method: "TEXT_FILTER_METHOD_CONTAINS" } });
+        }
+      }
+
+      if (trimmed.includes("@")) {
+        queries.push({ emailQuery: { emailAddress: trimmed, method: "TEXT_FILTER_METHOD_EQUALS_IGNORE_CASE" } });
+      }
+
       const res = await fetch(`${ZITADEL_ISSUER}/v2/users`, {
         method: "POST",
         headers: {
@@ -182,8 +202,9 @@ export async function searchUserByPhone(phoneOrUsername: string): Promise<Zitade
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
+          queries: [{ orQuery: { queries } }],
           query: {
-            limit: 100,
+            limit: 10,
             asc: true,
           },
         }),
@@ -194,22 +215,15 @@ export async function searchUserByPhone(phoneOrUsername: string): Promise<Zitade
         const data = await res.json();
         const rawList: RawZitadelUser[] = data.result || [];
 
-        const found = rawList.find((u) => {
-          const uPhone = (u.human?.phone?.phone || "").replace(/\D/g, "");
-          const uUserDigits = (u.username || "").replace(/\D/g, "");
-          const uLogin = (u.preferredLoginName || u.username || "").toLowerCase();
-          const uEmail = (u.human?.email?.email || "").toLowerCase();
-          const qLower = trimmed.toLowerCase();
+        if (rawList.length > 0) {
+          // Prioritaskan yang cocok persis dengan username atau no telepon
+          const found =
+            rawList.find((u) => {
+              const uPhone = (u.human?.phone?.phone || "").replace(/\D/g, "");
+              const uLogin = (u.preferredLoginName || u.username || "").toLowerCase();
+              return uLogin === trimmed.toLowerCase() || (cleanDigits.length >= 8 && uPhone.includes(cleanDigits));
+            }) || rawList[0];
 
-          return (
-            (cleanDigits.length >= 4 && (uPhone.includes(cleanDigits) || uUserDigits.includes(cleanDigits))) ||
-            uLogin === qLower ||
-            uEmail === qLower ||
-            uLogin.includes(qLower)
-          );
-        });
-
-        if (found) {
           const profile = found.human?.profile;
           const name =
             profile?.displayName ||
@@ -232,13 +246,16 @@ export async function searchUserByPhone(phoneOrUsername: string): Promise<Zitade
     }
   }
 
-  // 2. Fallback pencarian pada data sample/demo
-  const sample = FALLBACK_USERS.find((u) => {
-    const uDigits = u.phone.replace(/\D/g, "");
-    return (cleanDigits.length >= 4 && uDigits.includes(cleanDigits)) || u.username.toLowerCase() === trimmed.toLowerCase();
-  });
+  // 2. Fallback pencarian pada data sample/demo HANYA jika tidak ada token/key
+  if (!token) {
+    const sample = FALLBACK_USERS.find((u) => {
+      const uDigits = u.phone.replace(/\D/g, "");
+      return (cleanDigits.length >= 4 && uDigits.includes(cleanDigits)) || u.username.toLowerCase() === trimmed.toLowerCase();
+    });
+    return sample || null;
+  }
 
-  return sample || null;
+  return null;
 }
 
 /**
