@@ -5,7 +5,17 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Phone, ArrowLeft, Loader2, ShieldCheck, AlertCircle, Eye, EyeOff, Lock } from "lucide-react";
+
+function getInitials(name: string): string {
+  if (!name) return "U";
+  const parts = name.trim().split(" ");
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+  return name.substring(0, 2).toUpperCase();
+}
 
 interface PhonePinFormProps {
   authRequestId?: string;
@@ -202,18 +212,48 @@ export function PhonePinForm({
           </form>
         ) : (
           <form action="/api/auth/login" method="POST" onSubmit={handlePasswordSubmit} className="space-y-4">
-            {/* Akun Terpilih - terbaca jelas oleh user & terdeteksi 100% oleh browser password manager */}
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground font-medium">Akun</Label>
-              <Input
-                name="username"
-                type="text"
-                autoComplete="username"
-                value={phone}
-                readOnly
-                className="bg-muted/40 text-foreground font-medium text-sm h-10 border-border/60 select-none cursor-default"
-              />
+            {/* Preview Akun Terpilih - Menampilkan Display Name & Avatar */}
+            <div className="flex items-center justify-between p-3 rounded-xl border border-border/80 bg-muted/40">
+              <div className="flex items-center gap-3 min-w-0 flex-1 mr-2">
+                <Avatar className="h-10 w-10 border border-primary/20 bg-primary/10 text-primary font-bold shrink-0">
+                  <AvatarFallback>
+                    {getInitials(foundUser?.displayName || phone)}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="min-w-0 flex-1 text-left">
+                  <p className="font-semibold text-sm text-foreground truncate">
+                    {foundUser?.displayName || phone}
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {foundUser?.phone || phone}
+                  </p>
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setStep("phone");
+                  setPassword("");
+                  setError(null);
+                }}
+                className="h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground shrink-0 cursor-pointer"
+              >
+                Ganti
+              </Button>
             </div>
+
+            {/* Input username tersembunyi untuk browser password manager */}
+            <input
+              type="text"
+              name="username"
+              autoComplete="username"
+              value={phone}
+              className="sr-only"
+              tabIndex={-1}
+              readOnly
+            />
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -267,20 +307,6 @@ export function PhonePinForm({
                 "Masuk"
               )}
             </Button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setStep("phone");
-                setPassword("");
-                setError(null);
-              }}
-              disabled={loading}
-              className="w-full text-center text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center justify-center gap-1.5 pt-1"
-            >
-              <ArrowLeft className="h-3 w-3" />
-              <span>Ganti akun atau nomor telepon</span>
-            </button>
           </form>
         )}
       </CardContent>
