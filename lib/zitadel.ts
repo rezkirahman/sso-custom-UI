@@ -1,5 +1,87 @@
-const ZITADEL_ISSUER = process.env.ZITADEL_ISSUER || "https://sso-dev.agforce.co.id";
+import crypto from "crypto";
+
+const ZITADEL_ISSUER = process.env.ZITADEL_ISSUER || "https://sso.agforce.co.id";
 const ZITADEL_PAT = process.env.ZITADEL_PAT || "";
+const ZITADEL_KEY_BASE64 = process.env.ZITADEL_KEY_BASE64 || "";
+
+interface ZitadelKeyJson {
+  type: string;
+  keyId: string;
+  key: string;
+  userId: string;
+  expirationDate: string;
+}
+
+let cachedToken: { token: string; expiresAt: number } | null = null;
+
+/**
+ * Mengambil access token Service Account:
+ * 1. Menggunakan OAuth2 JWT Profile jika ZITADEL_KEY_BASE64 tersedia (Direkomendasikan)
+ * 2. Fallback ke ZITADEL_PAT jika key tidak ada
+ */
+export async function getServiceAccountToken(): Promise<string> {
+  const now = Math.floor(Date.now() / 1000);
+
+  // Jika token di memori masih valid (dengan buffer 60 detik)
+  if (cachedToken && cachedToken.expiresAt > now + 60) {
+    return cachedToken.token;
+  }
+
+  // Jika menggunakan Service Account Key JSON (Base64)
+  if (ZITADEL_KEY_BASE64) {
+    try {
+      const keyJson: ZitadelKeyJson = JSON.parse(
+        Buffer.from(ZITADEL_KEY_BASE64, "base64").toString("utf-8")
+      );
+
+      const b64url = (str: string) => Buffer.from(str).toString("base64url");
+      const header = { alg: "RS256", kid: keyJson.keyId, typ: "JWT" };
+      const payload = {
+        iss: keyJson.userId,
+        sub: keyJson.userId,
+        aud: ZITADEL_ISSUER,
+        iat: now,
+        exp: now + 3600,
+      };
+
+      const input = `${b64url(JSON.stringify(header))}.${b64url(JSON.stringify(payload))}`;
+      const signer = crypto.createSign("RSA-SHA256");
+      signer.update(input);
+      signer.end();
+      const sig = signer.sign(keyJson.key, "base64url");
+      const assertion = `${input}.${sig}`;
+
+      const params = new URLSearchParams();
+      params.append("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer");
+      params.append("assertion", assertion);
+      params.append("scope", "openid urn:zitadel:iam:org:project:id:zitadel:aud");
+
+      const res = await fetch(`${ZITADEL_ISSUER}/oauth/v2/token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: params.toString(),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.access_token) {
+          cachedToken = {
+            token: data.access_token,
+            expiresAt: now + (data.expires_in || 3600),
+          };
+          return data.access_token;
+        }
+      } else {
+        const errText = await res.text();
+        console.error("[Zitadel Token Error]", res.status, errText);
+      }
+    } catch (err) {
+      console.error("[Zitadel getServiceAccountToken Exception]", err);
+    }
+  }
+
+  return ZITADEL_PAT || "";
+}
 
 export interface ZitadelUser {
   id: string;
@@ -90,13 +172,14 @@ export async function searchUserByPhone(phoneOrUsername: string): Promise<Zitade
   const cleanDigits = trimmed.replace(/\D/g, "");
 
   // 1. Coba cari di ZITADEL Server
-  if (ZITADEL_PAT) {
+  const token = await getServiceAccountToken();
+  if (token) {
     try {
       const res = await fetch(`${ZITADEL_ISSUER}/v2/users`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${ZITADEL_PAT}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           query: {
@@ -173,13 +256,14 @@ export async function verifyUserPin(userId: string, pin: string): Promise<Verify
   }
 
   // 1. Coba eksekusi Session API v2 ZITADEL
-  if (ZITADEL_PAT) {
+  const token = await getServiceAccountToken();
+  if (token) {
     try {
       const res = await fetch(`${ZITADEL_ISSUER}/v2/sessions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${ZITADEL_PAT}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           checks: {
@@ -264,13 +348,14 @@ export async function finalizeAuthRequest(
     };
   }
 
-  if (ZITADEL_PAT) {
+  const token = await getServiceAccountToken();
+  if (token) {
     try {
       const res = await fetch(`${ZITADEL_ISSUER}/v2/oidc/auth_requests/${authRequestId}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${ZITADEL_PAT}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           session: {
@@ -306,13 +391,14 @@ export async function finalizeAuthRequest(
  * Menghapus / Mengakhiri Sesi di server ZITADEL
  */
 export async function deleteSession(sessionId: string): Promise<boolean> {
-  if (!sessionId || !ZITADEL_PAT) return true;
+  const token = await getServiceAccountToken();
+  if (!sessionId || !token) return true;
 
   try {
     const res = await fetch(`${ZITADEL_ISSUER}/v2/sessions/${sessionId}`, {
       method: "DELETE",
       headers: {
-        Authorization: `Bearer ${ZITADEL_PAT}`,
+        Authorization: `Bearer ${token}`,
       },
     });
 
