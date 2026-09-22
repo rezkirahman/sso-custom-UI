@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
         phone: account.phone,
         username: account.username,
       },
-      callbackUrl: authResult.callbackUrl || "/",
+      callbackUrl: authResult.callbackUrl || "/login",
     });
   } catch (err: unknown) {
     console.error("[Resume Route Error]", err);

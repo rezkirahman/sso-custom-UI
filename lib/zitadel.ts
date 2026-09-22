@@ -361,7 +361,7 @@ export async function finalizeAuthRequest(
   if (!authRequestId) {
     return {
       success: true,
-      callbackUrl: "/",
+      callbackUrl: "/login",
     };
   }
 

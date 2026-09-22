@@ -1,12 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { searchUserByPhone, verifyUserPin, finalizeAuthRequest } from "@/lib/zitadel";
 import { saveAccount, setActiveSession } from "@/lib/session-store";
+import { decryptPassword } from "@/lib/crypto-server";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { phone, pin, password: bodyPassword, authRequestId } = body;
-    const password = (pin || bodyPassword || "").trim();
+    const { phone, pin, password: bodyPassword, encryptedPassword, authRequestId } = body;
+
+    let rawPassword = "";
+    if (encryptedPassword) {
+      try {
+        rawPassword = decryptPassword(encryptedPassword);
+      } catch (decErr) {
+        console.error("[Login Decrypt Error]", decErr);
+        return NextResponse.json({ error: "Gagal mendekripsi kata sandi." }, { status: 400 });
+      }
+    } else {
+      rawPassword = pin || bodyPassword || "";
+    }
+
+    const password = rawPassword.trim();
 
     if (!phone || typeof phone !== "string") {
       return NextResponse.json({ error: "Nomor telepon atau username wajib diisi." }, { status: 400 });
@@ -60,7 +74,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       user,
-      callbackUrl: authResult.callbackUrl || "/",
+      callbackUrl: authResult.callbackUrl || "/login",
     });
   } catch (err: unknown) {
     console.error("[Login Route Error]", err);

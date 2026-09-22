@@ -18,6 +18,7 @@ import {
   Lock,
   LogOut,
 } from "lucide-react";
+import { encryptPassword } from "@/lib/crypto-client";
 
 interface AccountChooserProps {
   accounts: SavedAccount[];
@@ -116,12 +117,14 @@ export function AccountChooser({
     setError(null);
 
     try {
+      const encryptedPassword = await encryptPassword(cleanPassword);
+
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           phone: pinPromptAccount.phone || pinPromptAccount.username,
-          password: cleanPassword,
+          encryptedPassword,
           authRequestId,
         }),
       });
@@ -347,10 +350,10 @@ export function AccountChooser({
                         {account.displayName}
                       </p>
                       {hasActiveSession && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                          Sesi Aktif
-                        </span>
+                        <span
+                          className="h-2.5 w-2.5 rounded-full bg-emerald-500 shrink-0 inline-block"
+                          title="Sesi Aktif"
+                        />
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground truncate mt-0.5">

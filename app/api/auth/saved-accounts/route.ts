@@ -3,7 +3,7 @@ import { getSavedAccounts, removeSavedAccount } from "@/lib/session-store";
 
 export async function GET() {
   const accounts = await getSavedAccounts();
-  // Sembunyikan token dari response client
+  // Sembunyikan secret token dari response client, sertakan sessionId untuk indikator sesi aktif
   const safeAccounts = accounts.map((a) => ({
     id: a.id,
     displayName: a.displayName,
@@ -11,6 +11,7 @@ export async function GET() {
     username: a.username,
     lastLoginAt: a.lastLoginAt,
     avatarUrl: a.avatarUrl,
+    sessionId: a.sessionId,
   }));
   return NextResponse.json({ accounts: safeAccounts });
 }

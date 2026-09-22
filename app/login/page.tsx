@@ -11,11 +11,16 @@ function LoginContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  const authRequestId =
+  const rawRequestId =
+    searchParams.get("authRequest") ||
+    searchParams.get("requestId") ||
     searchParams.get("authRequestID") ||
     searchParams.get("authRequestId") ||
     searchParams.get("auth_request_id") ||
     undefined;
+
+  // Format ID ZITADEL v2: jika diawali oidc_, hapus prefixnya (misal oidc_V2_xxx -> V2_xxx)
+  const authRequestId = rawRequestId ? rawRequestId.replace(/^oidc_/, "") : undefined;
 
   const [loading, setLoading] = React.useState(true);
   const [savedAccounts, setSavedAccounts] = React.useState<SavedAccount[]>([]);

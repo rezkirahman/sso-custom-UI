@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Phone, ArrowLeft, Loader2, ShieldCheck, AlertCircle, Eye, EyeOff, Lock } from "lucide-react";
+import { encryptPassword } from "@/lib/crypto-client";
 
 function getInitials(name: string): string {
   if (!name) return "U";
@@ -93,12 +94,14 @@ export function PhonePinForm({
     setError(null);
 
     try {
+      const encryptedPassword = await encryptPassword(cleanPassword);
+
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           phone: phone.trim(),
-          password: cleanPassword,
+          encryptedPassword,
           authRequestId,
         }),
       });
