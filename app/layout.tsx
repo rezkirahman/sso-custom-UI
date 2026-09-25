@@ -20,6 +20,19 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Agforce Accounts - Standalone SSO Portal",
   description: "Portal Single Sign-On Mandiri untuk seluruh aplikasi ekosistem Agforce",
+  robots: {
+    index: false,
+    follow: false,
+    nocache: true,
+    googleBot: {
+      index: false,
+      follow: false,
+      noimageindex: true,
+      "max-video-preview": -1,
+      "max-image-preview": "none",
+      "max-snippet": -1,
+    },
+  },
 };
 
 import { Toaster } from "@/components/ui/sonner";

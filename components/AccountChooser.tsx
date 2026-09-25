@@ -19,6 +19,33 @@ import {
 } from "lucide-react";
 import { encryptPassword } from "@/lib/crypto-client";
 import { toast } from "sonner";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
+
+// Helper untuk memformat nomor HP
+function formatIndonesianPhone(value: string): string {
+  if (!value) return "";
+  const digits = value.replace(/\D/g, "");
+  const hasPlus = value.startsWith("+");
+  if (hasPlus && digits.startsWith("62")) {
+    const country = digits.substring(0, 2);
+    const p1 = digits.substring(2, 5);
+    const p2 = digits.substring(5, 9);
+    const p3 = digits.substring(9, 14);
+    let res = `+${country}`;
+    if (p1) res += ` ${p1}`;
+    if (p2) res += `-${p2}`;
+    if (p3) res += `-${p3}`;
+    return res;
+  } else {
+    const p1 = digits.substring(0, 4);
+    const p2 = digits.substring(4, 8);
+    const p3 = digits.substring(8, 14);
+    let res = p1;
+    if (p2) res += `-${p2}`;
+    if (p3) res += `-${p3}`;
+    return hasPlus ? `+${res}` : res;
+  }
+}
 
 interface AccountChooserProps {
   accounts: SavedAccount[];
@@ -207,20 +234,13 @@ export function AccountChooser({
     const isLoading = loadingId === pinPromptAccount.id;
     return (
       <Card className="w-full max-w-md shadow-xl border-border/60 backdrop-blur-sm bg-card/95 relative overflow-hidden">
-        {isLoading && (
-          <div className="absolute inset-0 z-10 bg-transparent transition-all flex items-start justify-center">
-            <div className="h-1 w-full absolute top-0 bg-primary/20 overflow-hidden">
-              <div className="h-full bg-primary animate-pulse w-1/3"></div>
-            </div>
-          </div>
-        )}
         <CardHeader className="space-y-2 text-center pb-3 relative z-0">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary font-bold text-lg mb-1 shadow-sm">
             {getInitials(pinPromptAccount.displayName)}
           </div>
           <CardTitle className="text-xl font-bold">{pinPromptAccount.displayName}</CardTitle>
           <CardDescription className="text-sm">
-            {pinPromptAccount.phone || pinPromptAccount.username}
+            {formatIndonesianPhone(pinPromptAccount.phone || pinPromptAccount.username || "")}
           </CardDescription>
         </CardHeader>
 
@@ -236,35 +256,31 @@ export function AccountChooser({
               readOnly
             />
 
-            <div className="space-y-2">
-              <Label htmlFor="account-password-input" className="text-sm font-medium">
-                Kata Sandi
-              </Label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-muted-foreground">
-                  <Lock className="h-4 w-4" />
-                </div>
-                <Input
+            <div className="space-y-4">
+              <div className="flex items-center justify-center">
+                <Label htmlFor="account-password-input" className="text-sm font-medium text-center w-full">
+                  PIN Keamanan (6 Angka)
+                </Label>
+              </div>
+              <div className="flex justify-center w-full pb-1">
+                <InputOTP
                   id="account-password-input"
                   name="password"
-                  ref={passwordInputRef}
-                  type={showPassword ? "text" : "password"}
-                  autoComplete="current-password"
-                  placeholder="Masukkan kata sandi..."
+                  maxLength={6}
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(val) => setPassword(val)}
                   disabled={isLoading}
-                  className="pl-10 pr-10 h-11 text-base transition-colors focus-visible:ring-primary/40"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground transition-colors"
-                  tabIndex={-1}
-                  aria-label={showPassword ? "Sembunyikan kata sandi" : "Tampilkan kata sandi"}
+                  ref={passwordInputRef as any}
                 >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
+                  <InputOTPGroup>
+                    <InputOTPSlot index={0} className="w-12 h-14 text-2xl" />
+                    <InputOTPSlot index={1} className="w-12 h-14 text-2xl" />
+                    <InputOTPSlot index={2} className="w-12 h-14 text-2xl" />
+                    <InputOTPSlot index={3} className="w-12 h-14 text-2xl" />
+                    <InputOTPSlot index={4} className="w-12 h-14 text-2xl" />
+                    <InputOTPSlot index={5} className="w-12 h-14 text-2xl" />
+                  </InputOTPGroup>
+                </InputOTP>
               </div>
             </div>
 
@@ -355,7 +371,7 @@ export function AccountChooser({
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground truncate mt-0.5">
-                      {account.phone || account.username}
+                      {formatIndonesianPhone(account.phone || account.username || "")}
                     </p>
                   </div>
                 </div>

@@ -27,27 +27,27 @@ export async function searchUserByPhone(phoneQuery: string): Promise<ZitadelUser
   const trimmed = phoneQuery.trim();
   const cleanDigits = trimmed.replace(/\D/g, "");
 
+  // Aturan Bisnis: Hanya melayani nomor handphone (minimal 8 angka)
+  if (cleanDigits.length < 8) {
+    return null;
+  }
+
   const token = await getServiceAccountToken();
   if (token) {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const queries: any[] = [
-        { userNameQuery: { userName: trimmed, method: "TEXT_FILTER_METHOD_EQUALS_IGNORE_CASE" } },
-      ];
+      const queries: any[] = [];
 
-      if (cleanDigits.length >= 4) {
-        queries.push({ userNameQuery: { userName: cleanDigits, method: "TEXT_FILTER_METHOD_CONTAINS" } });
-        queries.push({ phoneQuery: { phone: cleanDigits, method: "TEXT_FILTER_METHOD_CONTAINS" } });
-        if (cleanDigits.startsWith("0")) {
-          queries.push({ phoneQuery: { phone: "+62" + cleanDigits.substring(1), method: "TEXT_FILTER_METHOD_CONTAINS" } });
-        } else if (cleanDigits.startsWith("62")) {
-          queries.push({ userNameQuery: { userName: "0" + cleanDigits.substring(2), method: "TEXT_FILTER_METHOD_CONTAINS" } });
-          queries.push({ phoneQuery: { phone: "+" + cleanDigits, method: "TEXT_FILTER_METHOD_CONTAINS" } });
-        }
-      }
-
-      if (trimmed.includes("@")) {
-        queries.push({ emailQuery: { emailAddress: trimmed, method: "TEXT_FILTER_METHOD_EQUALS_IGNORE_CASE" } });
+      // Cari di field Phone dan Username
+      queries.push({ phoneQuery: { phone: cleanDigits, method: "TEXT_FILTER_METHOD_CONTAINS" } });
+      queries.push({ userNameQuery: { userName: cleanDigits, method: "TEXT_FILTER_METHOD_CONTAINS" } });
+      
+      if (cleanDigits.startsWith("0")) {
+        queries.push({ phoneQuery: { phone: "+62" + cleanDigits.substring(1), method: "TEXT_FILTER_METHOD_CONTAINS" } });
+      } else if (cleanDigits.startsWith("62")) {
+        queries.push({ phoneQuery: { phone: "+" + cleanDigits, method: "TEXT_FILTER_METHOD_CONTAINS" } });
+        // Jika diketik 628..., cari juga username 08...
+        queries.push({ userNameQuery: { userName: "0" + cleanDigits.substring(2), method: "TEXT_FILTER_METHOD_CONTAINS" } });
       }
 
       const res = await fetch(`${ZITADEL_ISSUER}/v2/users`, {
@@ -71,16 +71,12 @@ export async function searchUserByPhone(phoneQuery: string): Promise<ZitadelUser
         const rawList: RawZitadelUser[] = data.result || [];
 
         if (rawList.length > 0) {
+          // Filter pencarian: Cocokkan digit baik di phone maupun username ZITADEL
           const found = rawList.find((u) => {
             const uPhone = (u.human?.phone?.phone || "").replace(/\D/g, "");
-            const uLogin = (u.preferredLoginName || u.username || "").toLowerCase();
-            const uEmail = (u.human?.email?.email || "").toLowerCase();
+            const uLogin = (u.preferredLoginName || u.username || "").replace(/\D/g, "");
             
-            return (
-              uLogin === trimmed.toLowerCase() ||
-              uEmail === trimmed.toLowerCase() ||
-              (cleanDigits.length >= 8 && uPhone.endsWith(cleanDigits))
-            );
+            return cleanDigits.length >= 8 && (uPhone.endsWith(cleanDigits) || uLogin.endsWith(cleanDigits));
           });
 
           if (!found) {

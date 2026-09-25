@@ -98,10 +98,10 @@ function LoginContent() {
       <div className="mt-8 flex flex-col items-center space-y-2 text-xs text-muted-foreground text-center">
         <div className="flex items-center gap-1.5">
           <Lock className="h-3 w-3 text-muted-foreground/80" />
-          <span>Koneksi aman terenkripsi TLS 1.3 &bull; ZITADEL Identity Provider</span>
+          <span>Koneksi aman terenkripsi TLS 1.3 &bull; Agforce Identity Service</span>
         </div>
         <p className="text-[11px] text-muted-foreground/60">
-          &copy; {new Date().getFullYear()} PT Agforce Indonesia. Seluruh hak cipta dilindungi.
+          &copy; {new Date().getFullYear()} Agforce. Seluruh hak cipta dilindungi.
         </p>
       </div>
     </div>

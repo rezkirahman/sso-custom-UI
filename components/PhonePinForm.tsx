@@ -6,9 +6,40 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { Phone, ArrowLeft, Loader2, ShieldCheck, Eye, EyeOff, Lock } from "lucide-react";
 import { encryptPassword } from "@/lib/crypto-client";
 import { toast } from "sonner";
+import { TransitionPanel } from "@/components/ui/transition-panel";
+import useMeasure from "react-use-measure";
+
+// Helper untuk memformat nomor HP ala WhatsApp (0812-3456-7890 atau +62 812-3456-7890)
+function formatIndonesianPhone(value: string): string {
+  const digits = value.replace(/\D/g, "");
+  const hasPlus = value.startsWith("+");
+
+  if (hasPlus && digits.startsWith("62")) {
+    const country = digits.substring(0, 2);
+    const p1 = digits.substring(2, 5);
+    const p2 = digits.substring(5, 9);
+    const p3 = digits.substring(9, 14);
+
+    let res = `+${country}`;
+    if (p1) res += ` ${p1}`;
+    if (p2) res += `-${p2}`;
+    if (p3) res += `-${p3}`;
+    return res;
+  } else {
+    const p1 = digits.substring(0, 4);
+    const p2 = digits.substring(4, 8);
+    const p3 = digits.substring(8, 14);
+
+    let res = p1;
+    if (p2) res += `-${p2}`;
+    if (p3) res += `-${p3}`;
+    return hasPlus ? `+${res}` : res;
+  }
+}
 
 function getInitials(name: string): string {
   if (!name) return "U";
@@ -33,6 +64,8 @@ export function PhonePinForm({
   hasSavedAccounts = false,
 }: PhonePinFormProps) {
   const [step, setStep] = React.useState<"phone" | "password">("phone");
+  const [direction, setDirection] = React.useState(1);
+  const [ref, bounds] = useMeasure();
   const [phone, setPhone] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
@@ -55,9 +88,9 @@ export function PhonePinForm({
 
   const handlePhoneSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanPhone = phone.trim();
-    if (!cleanPhone) {
-      toast.error("Silakan masukkan nomor telepon atau username Anda.");
+    const cleanPhone = phone.replace(/[^\d+]/g, ""); // Hapus spasi dan strip
+    if (!cleanPhone || cleanPhone.length < 8) {
+      toast.error("Silakan masukkan nomor handphone Anda yang valid (minimal 8 angka).");
       return;
     }
 
@@ -69,6 +102,7 @@ export function PhonePinForm({
 
       if (res.ok && data.success) {
         setFoundUser(data.user);
+        setDirection(1);
         setStep("password");
         setPassword("");
       } else {
@@ -94,12 +128,13 @@ export function PhonePinForm({
 
     try {
       const encryptedPassword = await encryptPassword(cleanPassword);
+      const cleanPhone = phone.replace(/[^\d+]/g, "");
 
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          phone: phone,
+          phone: cleanPhone,
           encryptedPassword,
           authRequestId,
         }),
@@ -118,7 +153,7 @@ export function PhonePinForm({
           const CredClass = (window as any).PasswordCredential;
           if (CredClass) {
             const cred = new CredClass({
-              id: phone,
+              id: cleanPhone,
               password: cleanPassword,
               name: foundUser?.displayName,
             });
@@ -149,36 +184,51 @@ export function PhonePinForm({
 
   return (
     <Card className="w-full max-w-md shadow-xl border-border/60 backdrop-blur-sm bg-card/95 relative overflow-hidden">
-      {loading && (
-        <div className="absolute inset-0 z-10 bg-transparent transition-all flex items-start justify-center">
-          <div className="h-1 w-full absolute top-0 bg-primary/20 overflow-hidden">
-            <div className="h-full bg-primary animate-pulse w-1/3"></div>
+      <TransitionPanel
+        activeIndex={step === "phone" ? 0 : 1}
+        custom={direction}
+        transition={{
+          x: { type: "spring", stiffness: 300, damping: 30 },
+          opacity: { duration: 0.2 },
+        }}
+        variants={{
+          enter: (direction) => ({
+            x: direction > 0 ? (bounds.width || 400) : -(bounds.width || 400),
+            opacity: 0,
+            height: bounds.height > 0 ? bounds.height : "auto",
+            position: "initial",
+          }),
+          center: {
+            zIndex: 1,
+            x: 0,
+            opacity: 1,
+            height: bounds.height > 0 ? bounds.height : "auto",
+          },
+          exit: (direction) => ({
+            zIndex: 0,
+            x: direction < 0 ? (bounds.width || 400) : -(bounds.width || 400),
+            opacity: 0,
+            position: "absolute",
+            top: 0,
+            width: "100%",
+          }),
+        }}
+      >
+        <div key="phone-panel" ref={ref} className="p-6 space-y-4">
+          <div className="space-y-2 text-center pb-2">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary mb-1">
+              <ShieldCheck className="h-6 w-6" />
+            </div>
+            <h2 className="text-2xl font-bold tracking-tight">Masuk ke Agforce</h2>
+            <p className="text-sm text-muted-foreground">
+              Gunakan nomor handphone terdaftar untuk mengakses ekosistem Agforce
+            </p>
           </div>
-        </div>
-      )}
 
-      <CardHeader className="space-y-2 text-center pb-4 relative z-0">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary mb-1">
-          <ShieldCheck className="h-6 w-6" />
-        </div>
-        <CardTitle className="text-2xl font-bold tracking-tight">
-          {step === "phone" ? "Masuk ke Agforce" : "Masukkan Kata Sandi"}
-        </CardTitle>
-        <CardDescription className="text-sm">
-          {step === "phone"
-            ? "Gunakan nomor telepon atau username terdaftar untuk mengakses ekosistem Agforce"
-            : foundUser
-            ? `Halo, ${foundUser.displayName}! Masukkan kata sandi atau PIN akun Anda`
-            : `Masukkan kata sandi atau PIN untuk ${phone}`}
-        </CardDescription>
-      </CardHeader>
-
-      <CardContent className="space-y-4 pt-2 relative z-0">
-        {step === "phone" ? (
           <form action="/api/auth/search" method="GET" onSubmit={handlePhoneSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="phone-input" className="text-sm font-medium">
-                Nomor Telepon / Username
+                Nomor Handphone
               </Label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-muted-foreground">
@@ -186,21 +236,24 @@ export function PhonePinForm({
                 </div>
                 <Input
                   id="phone-input"
-                  name="username"
+                  name="phone"
                   ref={phoneInputRef}
-                  type="text"
-                  autoComplete="username"
-                  placeholder="Contoh: 081234567890 atau rezki"
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9+\s\-]*"
+                  autoComplete="tel"
+                  placeholder="Contoh: 081234567890"
                   value={phone}
                   onChange={(e) => {
-                    setPhone(e.target.value);
+                    const formattedVal = formatIndonesianPhone(e.target.value);
+                    setPhone(formattedVal);
                   }}
                   disabled={loading}
                   className="pl-10 h-11 text-base transition-colors focus-visible:ring-primary/40"
                 />
               </div>
               <p className="text-xs text-muted-foreground">
-                Format: Nomor handphone <code>08...</code> atau username karyawan
+                Format: Awali dengan <code>08...</code> atau <code>62...</code>
               </p>
             </div>
 
@@ -215,7 +268,35 @@ export function PhonePinForm({
               )}
             </Button>
           </form>
-        ) : (
+
+          {hasSavedAccounts && onBackToChooser && (
+            <div className="pt-2 border-t border-border/50">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={onBackToChooser}
+                className="w-full text-sm font-normal text-muted-foreground hover:text-foreground"
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Kembali ke Daftar Akun
+              </Button>
+            </div>
+          )}
+        </div>
+
+        <div key="pin-panel" ref={ref} className="p-6 space-y-4">
+          <div className="space-y-2 text-center pb-2">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary mb-1">
+              <ShieldCheck className="h-6 w-6" />
+            </div>
+            <h2 className="text-2xl font-bold tracking-tight">Masukkan Kata Sandi</h2>
+            <p className="text-sm text-muted-foreground">
+              {foundUser
+                ? `Halo, ${foundUser.displayName}! Masukkan kata sandi atau PIN akun Anda`
+                : `Masukkan kata sandi atau PIN untuk ${phone}`}
+            </p>
+          </div>
+
           <form action="/api/auth/login" method="POST" onSubmit={handlePasswordSubmit} className="space-y-4">
             <div className="flex items-center justify-between p-3 rounded-xl border border-border/80 bg-muted/40">
               <div className="flex items-center gap-3 min-w-0 flex-1 mr-2">
@@ -238,6 +319,7 @@ export function PhonePinForm({
                 variant="ghost"
                 size="sm"
                 onClick={() => {
+                  setDirection(-1);
                   setStep("phone");
                   setPassword("");
                 }}
@@ -257,37 +339,31 @@ export function PhonePinForm({
               readOnly
             />
 
-            <div className="space-y-2">
-              <Label htmlFor="password-input" className="text-sm font-medium">
-                Kata Sandi / PIN
-              </Label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-muted-foreground">
-                  <Lock className="h-4 w-4" />
-                </div>
-                <Input
+            <div className="space-y-4">
+              <div className="flex items-center justify-center">
+                <Label htmlFor="password-input" className="text-sm font-medium text-center w-full">
+                  PIN Keamanan (6 Angka)
+                </Label>
+              </div>
+              <div className="flex justify-center w-full pb-1">
+                <InputOTP
                   id="password-input"
                   name="password"
-                  ref={passwordInputRef}
-                  type={showPassword ? "text" : "password"}
-                  autoComplete="current-password"
-                  placeholder="Masukkan kata sandi atau PIN Anda"
+                  maxLength={6}
                   value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value);
-                  }}
+                  onChange={(val) => setPassword(val)}
                   disabled={loading}
-                  className="pl-10 pr-10 h-11 text-base transition-colors focus-visible:ring-primary/40"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground transition-colors"
-                  tabIndex={-1}
-                  aria-label={showPassword ? "Sembunyikan kata sandi" : "Tampilkan kata sandi"}
+                  ref={passwordInputRef as any}
                 >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
+                  <InputOTPGroup>
+                    <InputOTPSlot index={0} className="w-12 h-14 text-2xl" />
+                    <InputOTPSlot index={1} className="w-12 h-14 text-2xl" />
+                    <InputOTPSlot index={2} className="w-12 h-14 text-2xl" />
+                    <InputOTPSlot index={3} className="w-12 h-14 text-2xl" />
+                    <InputOTPSlot index={4} className="w-12 h-14 text-2xl" />
+                    <InputOTPSlot index={5} className="w-12 h-14 text-2xl" />
+                  </InputOTPGroup>
+                </InputOTP>
               </div>
             </div>
 
@@ -306,22 +382,8 @@ export function PhonePinForm({
               )}
             </Button>
           </form>
-        )}
-      </CardContent>
-
-      {hasSavedAccounts && step === "phone" && onBackToChooser && (
-        <CardFooter className="pt-2 border-t border-border/50 relative z-0">
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={onBackToChooser}
-            className="w-full text-sm font-normal text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Kembali ke Daftar Akun
-          </Button>
-        </CardFooter>
-      )}
+        </div>
+      </TransitionPanel>
     </Card>
   );
 }

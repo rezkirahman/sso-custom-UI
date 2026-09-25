@@ -7,7 +7,7 @@ import { z } from "zod";
 import { ERROR_MESSAGES } from "@/lib/constants/errors";
 
 const loginSchema = z.object({
-  phone: z.string().min(1, "Nomor telepon atau username wajib diisi."),
+  phone: z.string().min(8, "Nomor handphone wajib diisi dan valid."),
   encryptedPassword: z.string().min(1, ERROR_MESSAGES.INSECURE_CONNECTION),
   authRequestId: z.string().optional(),
 });
