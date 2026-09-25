@@ -34,9 +34,20 @@ export async function getSavedAccounts(): Promise<SavedAccount[]> {
   if (!raw) return [];
   
   try {
-    const unsealed = await unsealData<SavedAccount[]>(raw, { password: getSessionPassword() });
-    if (Array.isArray(unsealed)) {
-      return unsealed.sort((a, b) => (b.lastLoginAt || 0) - (a.lastLoginAt || 0));
+    const unsealed = await unsealData<any>(raw, { password: getSessionPassword() });
+    if (unsealed) {
+      if (Array.isArray(unsealed.accounts)) {
+        return unsealed.accounts.sort((a: SavedAccount, b: SavedAccount) => (b.lastLoginAt || 0) - (a.lastLoginAt || 0));
+      }
+      if (Array.isArray(unsealed)) {
+        return unsealed.sort((a, b) => (b.lastLoginAt || 0) - (a.lastLoginAt || 0));
+      }
+      if (typeof unsealed === "object") {
+        const list = Object.values(unsealed) as SavedAccount[];
+        if (Array.isArray(list) && list.length > 0 && list[0]?.id) {
+          return list.sort((a, b) => (b.lastLoginAt || 0) - (a.lastLoginAt || 0));
+        }
+      }
     }
   } catch (err) {
     // Fallback parsing plaintext jika cookie sebelumnya belum dienkripsi (masa transisi)
@@ -72,7 +83,7 @@ export async function saveAccount(account: Omit<SavedAccount, "lastLoginAt">): P
 
   // Maksimal simpan 5 akun terakhir
   const trimmed = accounts.slice(0, 5);
-  const encrypted = await sealData(trimmed, { password: getSessionPassword() });
+  const encrypted = await sealData({ accounts: trimmed }, { password: getSessionPassword() });
 
   const cookieStore = await cookies();
   cookieStore.set({
@@ -94,7 +105,7 @@ export async function saveAccount(account: Omit<SavedAccount, "lastLoginAt">): P
 export async function removeSavedAccount(accountId: string): Promise<SavedAccount[]> {
   const accounts = await getSavedAccounts();
   const filtered = accounts.filter((a) => a.id !== accountId);
-  const encrypted = await sealData(filtered, { password: getSessionPassword() });
+  const encrypted = await sealData({ accounts: filtered }, { password: getSessionPassword() });
 
   const cookieStore = await cookies();
   cookieStore.set({
@@ -170,7 +181,7 @@ export async function clearAccountSession(accountId: string): Promise<SavedAccou
     return a;
   });
 
-  const encrypted = await sealData(updated, { password: getSessionPassword() });
+  const encrypted = await sealData({ accounts: updated }, { password: getSessionPassword() });
   const cookieStore = await cookies();
   cookieStore.set({
     name: SAVED_ACCOUNTS_COOKIE,
