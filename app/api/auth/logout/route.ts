@@ -1,11 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSavedAccounts, clearActiveSession, removeSavedAccount, clearAccountSession, getActiveSession } from "@/lib/session-store";
 import { deleteSession } from "@/lib/zitadel";
+import { z } from "zod";
+import { ERROR_MESSAGES } from "@/lib/constants/errors";
+
+const logoutSchema = z.object({
+  accountId: z.string().optional(),
+  action: z.enum(["logout", "remove"]).default("logout"),
+});
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
-    const { accountId, action = "logout" } = body;
+    const parseResult = logoutSchema.safeParse(body);
+
+    if (!parseResult.success) {
+      return NextResponse.json({ error: ERROR_MESSAGES.INVALID_PAYLOAD }, { status: 400 });
+    }
+
+    const { accountId, action } = parseResult.data;
 
     const savedAccounts = await getSavedAccounts();
     const targetAccount = accountId ? savedAccounts.find((a) => a.id === accountId) : null;

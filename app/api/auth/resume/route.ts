@@ -1,15 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSavedAccounts, saveAccount, setActiveSession } from "@/lib/session-store";
 import { finalizeAuthRequest } from "@/lib/zitadel";
+import { z } from "zod";
+import { ERROR_MESSAGES } from "@/lib/constants/errors";
+
+const resumeSchema = z.object({
+  userId: z.string().min(1, "User ID diperlukan."),
+  authRequestId: z.string().optional(),
+});
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { userId, authRequestId } = body;
+    const body = await req.json().catch(() => ({}));
+    const parseResult = resumeSchema.safeParse(body);
 
-    if (!userId) {
-      return NextResponse.json({ error: "User ID diperlukan." }, { status: 400 });
+    if (!parseResult.success) {
+      return NextResponse.json({ error: parseResult.error.issues[0]?.message || "Payload tidak valid" }, { status: 400 });
     }
+
+    const { userId, authRequestId } = parseResult.data;
 
     // Ambil daftar akun yang tersimpan
     const savedAccounts = await getSavedAccounts();

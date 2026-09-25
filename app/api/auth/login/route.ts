@@ -2,32 +2,47 @@ import { NextRequest, NextResponse } from "next/server";
 import { searchUserByPhone, verifyUserPin, finalizeAuthRequest } from "@/lib/zitadel";
 import { saveAccount, setActiveSession } from "@/lib/session-store";
 import { decryptPassword } from "@/lib/crypto-server";
+import { checkRateLimit, clearRateLimit } from "@/lib/rate-limit";
+import { z } from "zod";
+import { ERROR_MESSAGES } from "@/lib/constants/errors";
+
+const loginSchema = z.object({
+  phone: z.string().min(1, "Nomor telepon atau username wajib diisi."),
+  encryptedPassword: z.string().min(1, ERROR_MESSAGES.INSECURE_CONNECTION),
+  authRequestId: z.string().optional(),
+});
 
 export async function POST(req: NextRequest) {
+  // Rate limit: Max 10 failed attempts per 5 minutes per IP
+  const rateLimit = checkRateLimit(req, "login", { limit: 10, windowMs: 5 * 60 * 1000 });
+  if (!rateLimit.success) {
+    return NextResponse.json(
+      { error: "Terlalu banyak percobaan masuk yang gagal. Silakan coba lagi setelah 5 menit." },
+      { status: 429 }
+    );
+  }
+
   try {
-    const body = await req.json();
-    const { phone, pin, password: bodyPassword, encryptedPassword, authRequestId } = body;
+    const body = await req.json().catch(() => ({}));
+    const parseResult = loginSchema.safeParse(body);
+
+    if (!parseResult.success) {
+      return NextResponse.json({ error: parseResult.error.issues[0]?.message || "Payload tidak valid" }, { status: 400 });
+    }
+
+    const { phone, encryptedPassword, authRequestId } = parseResult.data;
 
     let rawPassword = "";
-    if (encryptedPassword) {
-      try {
-        rawPassword = decryptPassword(encryptedPassword);
-      } catch (decErr) {
-        console.error("[Login Decrypt Error]", decErr);
-        return NextResponse.json({ error: "Gagal mendekripsi kata sandi." }, { status: 400 });
-      }
-    } else {
-      rawPassword = pin || bodyPassword || "";
+    try {
+      rawPassword = decryptPassword(encryptedPassword);
+    } catch (decErr) {
+      console.error("[Login Decrypt Error]", decErr);
+      return NextResponse.json({ error: "Gagal mendekripsi kata sandi." }, { status: 400 });
     }
 
     const password = rawPassword.trim();
-
-    if (!phone || typeof phone !== "string") {
-      return NextResponse.json({ error: "Nomor telepon atau username wajib diisi." }, { status: 400 });
-    }
-
     if (!password) {
-      return NextResponse.json({ error: "Kata sandi atau PIN wajib diisi." }, { status: 400 });
+      return NextResponse.json({ error: ERROR_MESSAGES.MISSING_CREDENTIALS }, { status: 400 });
     }
 
     // 1. Cari user di ZITADEL
@@ -70,6 +85,9 @@ export async function POST(req: NextRequest) {
 
     // 5. Finalisasi Auth Request OIDC ke ZITADEL jika ada request dari Dexter/Venturis
     const authResult = await finalizeAuthRequest(sessionId, sessionToken, authRequestId);
+
+    // Jika berhasil masuk, bersihkan rekam jejak rate limit
+    clearRateLimit(req, "login");
 
     return NextResponse.json({
       success: true,

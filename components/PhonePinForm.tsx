@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Phone, ArrowLeft, Loader2, ShieldCheck, AlertCircle, Eye, EyeOff, Lock } from "lucide-react";
+import { Phone, ArrowLeft, Loader2, ShieldCheck, Eye, EyeOff, Lock } from "lucide-react";
 import { encryptPassword } from "@/lib/crypto-client";
+import { toast } from "sonner";
 
 function getInitials(name: string): string {
   if (!name) return "U";
@@ -36,62 +37,60 @@ export function PhonePinForm({
   const [password, setPassword] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
   const [foundUser, setFoundUser] = React.useState<{ displayName: string; phone: string } | null>(null);
 
   const phoneInputRef = React.useRef<HTMLInputElement>(null);
   const passwordInputRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
-    if (step === "phone") {
-      phoneInputRef.current?.focus();
-    } else if (step === "password") {
-      passwordInputRef.current?.focus();
-    }
+    const timer = setTimeout(() => {
+      if (step === "phone") {
+        phoneInputRef.current?.focus();
+      } else if (step === "password") {
+        passwordInputRef.current?.focus();
+      }
+    }, 100);
+    return () => clearTimeout(timer);
   }, [step]);
 
-  // Langkah 1: Validasi format & cek nomor telepon
   const handlePhoneSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanPhone = phone.trim();
     if (!cleanPhone) {
-      setError("Silakan masukkan nomor telepon atau username Anda.");
+      toast.error("Silakan masukkan nomor telepon atau username Anda.");
       return;
     }
 
     setLoading(true);
-    setError(null);
 
     try {
       const res = await fetch(`/api/auth/search?q=${encodeURIComponent(cleanPhone)}`);
       const data = await res.json();
 
-      if (!res.ok || !data.user) {
-        setError(data.error || "Nomor telepon atau username tidak terdaftar sebagai karyawan Agforce.");
-        setLoading(false);
-        return;
+      if (res.ok && data.success) {
+        setFoundUser(data.user);
+        setStep("password");
+        setPassword("");
+      } else {
+        toast.error(data.error || "Nomor tidak terdaftar");
       }
-
-      setFoundUser(data.user);
-      setStep("password");
     } catch {
-      setStep("password");
+      toast.error("Gagal terhubung ke server. Silakan periksa koneksi Anda.");
     } finally {
       setLoading(false);
     }
   };
 
-  // Langkah 2: Submit verifikasi Password / PIN
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanPassword = password.trim();
+
     if (!cleanPassword) {
-      setError("Silakan masukkan kata sandi atau PIN Anda.");
+      toast.error("Silakan masukkan kata sandi atau PIN Anda.");
       return;
     }
 
     setLoading(true);
-    setError(null);
 
     try {
       const encryptedPassword = await encryptPassword(cleanPassword);
@@ -100,7 +99,7 @@ export function PhonePinForm({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          phone: phone.trim(),
+          phone: phone,
           encryptedPassword,
           authRequestId,
         }),
@@ -109,45 +108,56 @@ export function PhonePinForm({
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        setError(data.error || "Kata sandi atau PIN salah. Silakan coba lagi.");
+        toast.error(data.error || "Gagal masuk. Kata sandi salah.");
         setLoading(false);
         return;
       }
 
-      // Simpan kredensial ke browser password manager jika didukung
-      if (typeof window !== "undefined" && "PasswordCredential" in window && navigator.credentials) {
+      if (typeof window !== "undefined" && navigator.credentials) {
         try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const CredClass = (window as any).PasswordCredential;
           if (CredClass) {
             const cred = new CredClass({
-              id: phone.trim(),
+              id: phone,
               password: cleanPassword,
-              name: foundUser?.displayName || phone.trim(),
+              name: foundUser?.displayName,
             });
             await navigator.credentials.store(cred);
           }
         } catch {
-          // Abaikan jika browser tidak mengizinkan atau user membatalkan
+          // Ignore
         }
       }
 
-      // Login berhasil, alihkan
+      toast.success("Login berhasil! Memuat sesi Anda...");
+
       const targetUrl = data.callbackUrl || "/";
       if (onSuccess) {
         onSuccess(targetUrl);
       } else {
         window.location.href = targetUrl;
       }
-    } catch {
-      setError("Terjadi gangguan koneksi ke server. Silakan coba beberapa saat lagi.");
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        toast.error(err.message);
+      } else {
+        toast.error("Terjadi gangguan koneksi ke server. Silakan coba beberapa saat lagi.");
+      }
       setLoading(false);
     }
   };
 
   return (
-    <Card className="w-full max-w-md shadow-xl border-border/60 backdrop-blur-sm bg-card/95">
-      <CardHeader className="space-y-2 text-center pb-4">
+    <Card className="w-full max-w-md shadow-xl border-border/60 backdrop-blur-sm bg-card/95 relative overflow-hidden">
+      {loading && (
+        <div className="absolute inset-0 z-10 bg-transparent transition-all flex items-start justify-center">
+          <div className="h-1 w-full absolute top-0 bg-primary/20 overflow-hidden">
+            <div className="h-full bg-primary animate-pulse w-1/3"></div>
+          </div>
+        </div>
+      )}
+
+      <CardHeader className="space-y-2 text-center pb-4 relative z-0">
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary mb-1">
           <ShieldCheck className="h-6 w-6" />
         </div>
@@ -163,14 +173,7 @@ export function PhonePinForm({
         </CardDescription>
       </CardHeader>
 
-      <CardContent className="space-y-4 pt-2">
-        {error && (
-          <div className="flex items-start gap-2.5 p-3.5 text-sm rounded-xl bg-destructive/10 text-destructive border border-destructive/20 animate-in fade-in duration-200">
-            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-            <span className="leading-snug">{error}</span>
-          </div>
-        )}
-
+      <CardContent className="space-y-4 pt-2 relative z-0">
         {step === "phone" ? (
           <form action="/api/auth/search" method="GET" onSubmit={handlePhoneSubmit} className="space-y-4">
             <div className="space-y-2">
@@ -191,10 +194,9 @@ export function PhonePinForm({
                   value={phone}
                   onChange={(e) => {
                     setPhone(e.target.value);
-                    if (error) setError(null);
                   }}
                   disabled={loading}
-                  className="pl-10 h-11 text-base"
+                  className="pl-10 h-11 text-base transition-colors focus-visible:ring-primary/40"
                 />
               </div>
               <p className="text-xs text-muted-foreground">
@@ -202,7 +204,7 @@ export function PhonePinForm({
               </p>
             </div>
 
-            <Button type="submit" disabled={loading || !phone.trim()} className="w-full h-11 font-medium text-base">
+            <Button type="submit" disabled={loading || !phone.trim()} className="w-full h-11 font-medium text-base relative overflow-hidden group">
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -215,7 +217,6 @@ export function PhonePinForm({
           </form>
         ) : (
           <form action="/api/auth/login" method="POST" onSubmit={handlePasswordSubmit} className="space-y-4">
-            {/* Preview Akun Terpilih - Menampilkan Display Name & Avatar */}
             <div className="flex items-center justify-between p-3 rounded-xl border border-border/80 bg-muted/40">
               <div className="flex items-center gap-3 min-w-0 flex-1 mr-2">
                 <Avatar className="h-10 w-10 border border-primary/20 bg-primary/10 text-primary font-bold shrink-0">
@@ -239,7 +240,6 @@ export function PhonePinForm({
                 onClick={() => {
                   setStep("phone");
                   setPassword("");
-                  setError(null);
                 }}
                 className="h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground shrink-0 cursor-pointer"
               >
@@ -247,7 +247,6 @@ export function PhonePinForm({
               </Button>
             </div>
 
-            {/* Input username tersembunyi untuk browser password manager */}
             <input
               type="text"
               name="username"
@@ -259,12 +258,9 @@ export function PhonePinForm({
             />
 
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="password-input" className="text-sm font-medium">
-                  Kata Sandi / PIN
-                </Label>
-              </div>
-
+              <Label htmlFor="password-input" className="text-sm font-medium">
+                Kata Sandi / PIN
+              </Label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-muted-foreground">
                   <Lock className="h-4 w-4" />
@@ -279,10 +275,9 @@ export function PhonePinForm({
                   value={password}
                   onChange={(e) => {
                     setPassword(e.target.value);
-                    if (error) setError(null);
                   }}
                   disabled={loading}
-                  className="pl-10 pr-10 h-11 text-base"
+                  className="pl-10 pr-10 h-11 text-base transition-colors focus-visible:ring-primary/40"
                 />
                 <button
                   type="button"
@@ -315,7 +310,7 @@ export function PhonePinForm({
       </CardContent>
 
       {hasSavedAccounts && step === "phone" && onBackToChooser && (
-        <CardFooter className="pt-2 border-t border-border/50">
+        <CardFooter className="pt-2 border-t border-border/50 relative z-0">
           <Button
             type="button"
             variant="ghost"

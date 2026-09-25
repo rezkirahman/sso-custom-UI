@@ -11,7 +11,6 @@ import {
   UserPlus,
   Loader2,
   Users,
-  AlertCircle,
   ArrowLeft,
   Eye,
   EyeOff,
@@ -19,6 +18,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { encryptPassword } from "@/lib/crypto-client";
+import { toast } from "sonner";
 
 interface AccountChooserProps {
   accounts: SavedAccount[];
@@ -40,11 +40,22 @@ export function AccountChooser({
   const [pinPromptAccount, setPinPromptAccount] = React.useState<SavedAccount | null>(null);
   const [password, setPassword] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+  
+  const passwordInputRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
     setAccountList(accounts);
   }, [accounts]);
+
+  // Autofocus PIN form when account is selected for re-authentication
+  React.useEffect(() => {
+    if (pinPromptAccount) {
+      const timer = setTimeout(() => {
+        passwordInputRef.current?.focus();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [pinPromptAccount]);
 
   const getInitials = (name: string) => {
     const parts = name.trim().split(" ");
@@ -54,9 +65,7 @@ export function AccountChooser({
     return name.slice(0, 2).toUpperCase();
   };
 
-  // Login 1-klik via Resume Route
   const handleSelectAccount = async (account: SavedAccount) => {
-    // Jika sesi sudah tidak ada di akun ini, minta kata sandi
     if (!account.sessionId) {
       setPinPromptAccount(account);
       setPassword("");
@@ -64,7 +73,6 @@ export function AccountChooser({
     }
 
     setLoadingId(account.id);
-    setError(null);
 
     try {
       const res = await fetch("/api/auth/resume", {
@@ -79,6 +87,7 @@ export function AccountChooser({
       const data = await res.json();
 
       if (res.ok && data.success) {
+        toast.success(`Selamat datang kembali, ${account.displayName}!`);
         const targetUrl = data.callbackUrl || "/login";
         if (onSuccess) {
           onSuccess(targetUrl);
@@ -88,33 +97,31 @@ export function AccountChooser({
         return;
       }
 
-      // Jika server meminta login ulang (misal sesi expired di ZITADEL)
       if (data.requirePin || res.status === 404) {
+        toast.info("Sesi telah kedaluwarsa. Silakan masukkan PIN kembali.");
         setPinPromptAccount(account);
         setPassword("");
       } else {
-        setError(data.error || "Gagal masuk dengan akun ini.");
+        toast.error(data.error || "Gagal masuk dengan akun ini.");
       }
     } catch {
-      setError("Gagal terhubung ke server. Silakan coba lagi.");
+      toast.error("Gagal terhubung ke server. Silakan coba lagi.");
     } finally {
       setLoadingId(null);
     }
   };
 
-  // Submit Kata Sandi untuk akun tertentu
   const handlePasswordSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!pinPromptAccount) return;
     const cleanPassword = password.trim();
 
     if (!cleanPassword) {
-      setError("Silakan masukkan kata sandi Anda.");
+      toast.error("Silakan masukkan kata sandi Anda.");
       return;
     }
 
     setLoadingId(pinPromptAccount.id);
-    setError(null);
 
     try {
       const encryptedPassword = await encryptPassword(cleanPassword);
@@ -132,15 +139,15 @@ export function AccountChooser({
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        setError(data.error || "Kata sandi yang dimasukkan salah.");
+        toast.error(data.error || "Kata sandi yang dimasukkan salah.");
         setLoadingId(null);
         return;
       }
 
-      // Simpan kredensial ke browser password manager jika didukung
-      if (typeof window !== "undefined" && "PasswordCredential" in window && navigator.credentials) {
+      toast.success("Login berhasil!");
+      
+      if (typeof window !== "undefined" && navigator.credentials) {
         try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const CredClass = (window as any).PasswordCredential;
           if (CredClass) {
             const cred = new CredClass({
@@ -151,7 +158,7 @@ export function AccountChooser({
             await navigator.credentials.store(cred);
           }
         } catch {
-          // Abaikan jika browser membatasi atau user membatalkan
+          // Abaikan
         }
       }
 
@@ -162,48 +169,53 @@ export function AccountChooser({
         window.location.href = targetUrl;
       }
     } catch {
-      setError("Terjadi gangguan jaringan saat verifikasi.");
+      toast.error("Terjadi gangguan koneksi ke server.");
       setLoadingId(null);
     }
   };
 
-  // 1-Klik Keluar & Hapus Sesi ke ZITADEL
   const handleDirectLogout = async (e: React.MouseEvent, account: SavedAccount) => {
     e.stopPropagation();
     setLoadingId(account.id);
-
+    
     try {
       const res = await fetch("/api/auth/logout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           accountId: account.id,
-          action: "remove",
+          action: "remove" 
         }),
       });
 
-      const data = await res.json();
-      if (res.ok && data.success) {
-        const updated = accountList.filter((a) => a.id !== account.id);
-        setAccountList(updated);
-        onAccountsUpdated?.(updated);
-        if (updated.length === 0) {
-          onUseAnotherAccount();
+      if (res.ok) {
+        const data = await res.json();
+        setAccountList(data.accounts);
+        toast.success("Akun berhasil dihapus dari perangkat ini.");
+        if (onAccountsUpdated) {
+          onAccountsUpdated(data.accounts);
         }
       }
-    } catch (err) {
-      console.error("Gagal keluar:", err);
+    } catch {
+      toast.error("Gagal menghapus akun.");
     } finally {
       setLoadingId(null);
     }
   };
 
-  // Jika akun meminta konfirmasi kata sandi
   if (pinPromptAccount) {
+    const isLoading = loadingId === pinPromptAccount.id;
     return (
-      <Card className="w-full max-w-md shadow-xl border-border/60 backdrop-blur-sm bg-card/95">
-        <CardHeader className="space-y-2 text-center pb-3">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary font-bold text-lg mb-1">
+      <Card className="w-full max-w-md shadow-xl border-border/60 backdrop-blur-sm bg-card/95 relative overflow-hidden">
+        {isLoading && (
+          <div className="absolute inset-0 z-10 bg-transparent transition-all flex items-start justify-center">
+            <div className="h-1 w-full absolute top-0 bg-primary/20 overflow-hidden">
+              <div className="h-full bg-primary animate-pulse w-1/3"></div>
+            </div>
+          </div>
+        )}
+        <CardHeader className="space-y-2 text-center pb-3 relative z-0">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary font-bold text-lg mb-1 shadow-sm">
             {getInitials(pinPromptAccount.displayName)}
           </div>
           <CardTitle className="text-xl font-bold">{pinPromptAccount.displayName}</CardTitle>
@@ -212,16 +224,8 @@ export function AccountChooser({
           </CardDescription>
         </CardHeader>
 
-        <CardContent className="space-y-4 pt-2">
-          {error && (
-            <div className="flex items-start gap-2.5 p-3.5 text-sm rounded-xl bg-destructive/10 text-destructive border border-destructive/20">
-              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-              <span>{error}</span>
-            </div>
-          )}
-
+        <CardContent className="space-y-4 pt-2 relative z-0">
           <form action="/api/auth/login" method="POST" onSubmit={handlePasswordSubmit} className="space-y-4">
-            {/* Input username tersembunyi untuk browser password manager */}
             <input
               type="text"
               name="username"
@@ -243,24 +247,21 @@ export function AccountChooser({
                 <Input
                   id="account-password-input"
                   name="password"
+                  ref={passwordInputRef}
                   type={showPassword ? "text" : "password"}
                   autoComplete="current-password"
-                  placeholder="Masukkan kata sandi akun Anda"
+                  placeholder="Masukkan kata sandi..."
                   value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value);
-                    if (error) setError(null);
-                  }}
-                  disabled={!!loadingId}
-                  className="pl-10 pr-10 h-11 text-base"
-                  autoFocus
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={isLoading}
+                  className="pl-10 pr-10 h-11 text-base transition-colors focus-visible:ring-primary/40"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground transition-colors"
                   tabIndex={-1}
-                  aria-label={showPassword ? "Sembunyikan" : "Tampilkan"}
+                  aria-label={showPassword ? "Sembunyikan kata sandi" : "Tampilkan kata sandi"}
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
@@ -269,29 +270,28 @@ export function AccountChooser({
 
             <Button
               type="submit"
-              disabled={!!loadingId || !password.trim()}
-              className="w-full h-11 font-medium text-base mt-2"
+              disabled={isLoading || !password.trim()}
+              className="w-full h-11 font-medium text-base relative overflow-hidden"
             >
-              {loadingId ? (
+              {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Memverifikasi...
                 </>
               ) : (
-                "Lanjutkan Masuk"
+                "Lanjutkan"
               )}
             </Button>
           </form>
         </CardContent>
 
-        <CardFooter className="border-t border-border/50 pt-3">
+        <CardFooter className="pt-2 border-t border-border/50 relative z-0">
           <Button
             type="button"
             variant="ghost"
             onClick={() => {
               setPinPromptAccount(null);
               setPassword("");
-              setError(null);
             }}
             className="w-full text-sm text-muted-foreground hover:text-foreground"
           >
@@ -305,55 +305,53 @@ export function AccountChooser({
 
   return (
     <Card className="w-full max-w-md shadow-xl border-border/60 backdrop-blur-sm bg-card/95">
-      <CardHeader className="space-y-2 text-center pb-3">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary mb-1">
+      <CardHeader className="space-y-2 text-center pb-4">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary mb-1 shadow-sm">
           <Users className="h-6 w-6" />
         </div>
         <CardTitle className="text-2xl font-bold tracking-tight">Pilih Akun</CardTitle>
         <CardDescription className="text-sm">
-          Pilih salah satu akun terdaftar di perangkat ini untuk melanjutkan ke aplikasi Agforce
+          Pilih akun Anda yang tersimpan untuk masuk ke Agforce
         </CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-3 pt-2">
-        {error && (
-          <div className="flex items-start gap-2.5 p-3.5 text-sm rounded-xl bg-destructive/10 text-destructive border border-destructive/20">
-            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-            <span>{error}</span>
-          </div>
-        )}
-
-        {/* Daftar Akun */}
         <div className="space-y-2">
           {accountList.map((account) => {
             const isLoading = loadingId === account.id;
-            const hasActiveSession = !!account.sessionId;
+            const needsPin = !account.sessionId;
 
             return (
               <div
                 key={account.id}
-                onClick={() => handleSelectAccount(account)}
-                className={`group flex items-center justify-between p-3.5 rounded-xl border border-border/70 transition-all cursor-pointer ${
-                  isLoading
-                    ? "bg-primary/5 border-primary/40 pointer-events-none"
-                    : "hover:bg-accent/60 hover:border-primary/40 active:scale-[0.99]"
-                }`}
+                className="group flex items-center justify-between p-3 rounded-xl border border-border/80 bg-background hover:bg-muted/40 transition-colors shadow-sm"
               >
-                {/* Info Akun (Klik untuk Login) */}
-                <div className="flex items-center gap-3.5 min-w-0 flex-1 mr-2">
-                  <Avatar className="h-10 w-10 border border-primary/20 bg-primary/10 text-primary font-semibold shrink-0">
+                <div
+                  className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer mr-2"
+                  onClick={() => handleSelectAccount(account)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      handleSelectAccount(account);
+                    }
+                  }}
+                >
+                  <Avatar className="h-11 w-11 border border-primary/20 bg-primary/10 text-primary font-bold shadow-sm">
                     <AvatarFallback>{getInitials(account.displayName)}</AvatarFallback>
                   </Avatar>
+                  
                   <div className="min-w-0 flex-1 text-left">
                     <div className="flex items-center gap-2">
-                      <p className="font-semibold text-sm truncate text-foreground group-hover:text-primary transition-colors">
+                      <p className="font-semibold text-sm text-foreground truncate">
                         {account.displayName}
                       </p>
-                      {hasActiveSession && (
-                        <span
-                          className="h-2.5 w-2.5 rounded-full bg-emerald-500 shrink-0 inline-block"
-                          title="Sesi Aktif"
-                        />
+                      {needsPin ? (
+                        <div className="flex h-4 items-center rounded bg-muted px-1 text-[10px] font-medium text-muted-foreground" title="Memerlukan PIN">
+                          <Lock className="h-3 w-3 mr-0.5" /> PIN
+                        </div>
+                      ) : (
+                        <div className="h-2 w-2 rounded-full bg-green-500 shadow-sm" title="Sesi Aktif" />
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground truncate mt-0.5">
@@ -362,7 +360,6 @@ export function AccountChooser({
                   </div>
                 </div>
 
-                {/* Tombol Keluar (Logout) */}
                 <div className="shrink-0">
                   {isLoading ? (
                     <Loader2 className="h-4 w-4 animate-spin text-primary" />
@@ -385,12 +382,11 @@ export function AccountChooser({
           })}
         </div>
 
-        {/* Tombol Gunakan Akun Lain */}
         <Button
           type="button"
           variant="outline"
           onClick={onUseAnotherAccount}
-          className="w-full h-11 border-dashed font-medium text-sm flex items-center justify-center gap-2 mt-2"
+          className="w-full h-11 border-dashed font-medium text-sm flex items-center justify-center gap-2 mt-2 hover:bg-muted/50 transition-colors"
         >
           <UserPlus className="h-4 w-4" />
           Gunakan Akun Lain

@@ -1,14 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 import { searchUserByPhone } from "@/lib/zitadel";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { z } from "zod";
+import { ERROR_MESSAGES } from "@/lib/constants/errors";
+
+const searchSchema = z.object({
+  q: z.string().min(1, "Query pencarian diperlukan").max(100, "Query terlalu panjang"),
+});
 
 export async function GET(req: NextRequest) {
+  const rateLimit = checkRateLimit(req, "search", { limit: 50, windowMs: 5 * 60 * 1000 });
+  if (!rateLimit.success) {
+    return NextResponse.json(
+      { error: ERROR_MESSAGES.TOO_MANY_REQUESTS },
+      { status: 429 }
+    );
+  }
+
   try {
     const { searchParams } = new URL(req.url);
-    const q = searchParams.get("q");
+    const parseResult = searchSchema.safeParse({ q: searchParams.get("q") || "" });
 
-    if (!q || !q.trim()) {
-      return NextResponse.json({ error: "Query pencarian diperlukan" }, { status: 400 });
+    if (!parseResult.success) {
+      return NextResponse.json({ error: parseResult.error.issues[0]?.message || "Payload tidak valid" }, { status: 400 });
     }
+
+    const { q } = parseResult.data;
 
     const user = await searchUserByPhone(q.trim());
     if (!user) {

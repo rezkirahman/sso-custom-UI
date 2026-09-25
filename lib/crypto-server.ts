@@ -5,13 +5,25 @@ let keyPair: { publicKeyJwk: JsonWebKey; privateKeyPem: string } | null = null;
 
 function getKeyPair() {
   if (!keyPair) {
-    const { publicKey, privateKey } = crypto.generateKeyPairSync("rsa", {
-      modulusLength: 2048,
-    });
-    keyPair = {
-      publicKeyJwk: publicKey.export({ format: "jwk" }) as JsonWebKey,
-      privateKeyPem: privateKey.export({ type: "pkcs8", format: "pem" }) as string,
-    };
+    if (process.env.RSA_PRIVATE_KEY_PEM) {
+      const pem = process.env.RSA_PRIVATE_KEY_PEM.replace(/\\n/g, '\n');
+      const privateKey = crypto.createPrivateKey(pem);
+      const publicKey = crypto.createPublicKey(privateKey);
+      keyPair = {
+        publicKeyJwk: publicKey.export({ format: "jwk" }) as JsonWebKey,
+        privateKeyPem: pem,
+      };
+    } else {
+      console.warn("⚠️ [SECURITY WARNING] RSA_PRIVATE_KEY_PEM tidak ditemukan di Environment Variables!");
+      console.warn("⚠️ Menggunakan kunci in-memory acak. Enkripsi akan rusak jika di-deploy di infrastruktur multi-instance/serverless.");
+      const { publicKey, privateKey } = crypto.generateKeyPairSync("rsa", {
+        modulusLength: 2048,
+      });
+      keyPair = {
+        publicKeyJwk: publicKey.export({ format: "jwk" }) as JsonWebKey,
+        privateKeyPem: privateKey.export({ type: "pkcs8", format: "pem" }) as string,
+      };
+    }
   }
   return keyPair;
 }

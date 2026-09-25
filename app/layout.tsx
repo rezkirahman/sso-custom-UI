@@ -22,6 +22,8 @@ export const metadata: Metadata = {
   description: "Portal Single Sign-On Mandiri untuk seluruh aplikasi ekosistem Agforce",
 };
 
+import { Toaster } from "@/components/ui/sonner";
+
 export default function RootLayout({
   children,
 }: {
@@ -32,7 +34,10 @@ export default function RootLayout({
       lang="id"
       className={cn("h-full", "antialiased", geistSans.variable, geistMono.variable, "font-sans", dmSans.variable, outfitHeading.variable)}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        {children}
+        <Toaster position="top-center" richColors />
+      </body>
     </html>
   );
 }

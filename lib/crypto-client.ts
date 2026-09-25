@@ -41,8 +41,12 @@ async function getClientEncryptionKey(): Promise<CryptoKey> {
  * Mengenkripsi password/PIN di sisi browser sebelum dikirim melalui jaringan (DevTools payload tidak melihat plaintext)
  */
 export async function encryptPassword(password: string): Promise<string> {
-  if (typeof window === "undefined" || !window.crypto?.subtle) {
-    return password;
+  if (typeof window === "undefined") {
+    throw new Error("Enkripsi hanya dapat dilakukan di browser.");
+  }
+
+  if (!window.crypto?.subtle) {
+    throw new Error("Browser tidak mendukung enkripsi atau koneksi tidak aman (HTTPS diperlukan).");
   }
 
   try {
@@ -52,7 +56,6 @@ export async function encryptPassword(password: string): Promise<string> {
     return arrayBufferToBase64(cipherBuffer);
   } catch (err) {
     console.error("[Client Encryption Error]", err);
-    // Jika Web Crypto tidak tersedia atau gagal, fallback kirim raw
-    return password;
+    throw new Error("Gagal mengenkripsi kata sandi. Pastikan koneksi aman.");
   }
 }
